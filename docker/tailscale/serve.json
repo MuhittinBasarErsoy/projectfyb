@@ -2,6 +2,9 @@
   "TCP": {
     "443": {
       "HTTPS": true
+    },
+    "1433": {
+      "TCPForward": "mssql:1433"
     }
   },
   "Web": {

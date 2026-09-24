@@ -79,6 +79,21 @@ docker compose -f docker-compose.tailscale.yml logs -f app
 
 Düğüm tailnet'e katıldıktan sonra `TS_AUTHKEY` artık gerekmez (kimlik `ts-state` biriminde saklanır).
 
+## Veritabanına SSMS ile bağlanma
+
+Veritabanı, uygulamayla aynı Tailscale düğümünün 1433 portundan yayınlanır (sunucuda port açılmaz,
+yalnızca tailnet cihazları erişir). SSMS → Bağlan:
+
+| Alan | Değer |
+|---|---|
+| Sunucu adı | `fyblue.<tailnet>.ts.net` |
+| Kimlik doğrulama | SQL Server Kimlik Doğrulaması |
+| Kullanıcı | `sa` — şifre: sunucuda `grep '^MSSQL_SA_PASSWORD=' /opt/fyblue/.env \| cut -d= -f2-` |
+| Şifrele | Zorunlu, **Sunucu Sertifikasına Güven** işaretli |
+
+`sa` şifresini değiştirmek için yalnızca `.env`'yi düzenlemek yetmez; önce SQL Server'da
+`ALTER LOGIN sa WITH PASSWORD = '...'` çalıştırılmalı, sonra `.env` güncellenip `up -d` yapılmalıdır.
+
 ## Güncelleme
 
 ```bash

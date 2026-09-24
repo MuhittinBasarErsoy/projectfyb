@@ -4,13 +4,14 @@
 #   docker compose -f docker-compose.tailscale.yml up -d --build
 #
 # Adres (MagicDNS): https://<TS_HOSTNAME>.<tailnet>.ts.net
+# Veritabanı (SSMS): <TS_HOSTNAME>.<tailnet>.ts.net, SQL Server kimlik doğrulaması, sa
 # TLS sertifikasını Tailscale sağlar (admin konsolu → DNS → HTTPS Certificates açık olmalı).
 # Ayrıntılar: docs/DEPLOY.md
 
 name: fyblue
 
 services:
-  # Tailnet'e "fyblue" adıyla katılan düğüm; 443'ü uygulamaya aktarır.
+  # Tailnet'e "fyblue" adıyla katılan düğüm: 443 → uygulama (HTTPS), 1433 → veritabanı (SSMS).
   ts:
     image: tailscale/tailscale:latest
     container_name: fyblue-ts
@@ -38,11 +39,8 @@ services:
       MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?MSSQL_SA_PASSWORD tanimlanmali}
       MSSQL_PID: ${MSSQL_PID:-Developer}
       TZ: Europe/Istanbul
-    # SSMS vb. için port yalnızca MSSQL_BIND adresinde açılır. Varsayılan 127.0.0.1:
-    # sunucunun dışından erişilemez (SSH tüneli gerekir). Tailnet'ten doğrudan erişim için
-    # .env'de MSSQL_BIND'i sunucunun Tailscale IP'si yapın (0.0.0.0 KULLANMAYIN).
-    ports:
-      - "${MSSQL_BIND:-127.0.0.1}:${MSSQL_PORT:-14330}:1433"
+    # Sunucuda port açılmaz. SSMS erişimi Tailscale düğümü üzerinden:
+    # fyblue.<tailnet>.ts.net:1433 → mssql:1433 (docker/tailscale/serve.json). Yalnızca tailnet'ten erişilir.
     volumes:
       - mssql-data:/var/opt/mssql
     healthcheck:
