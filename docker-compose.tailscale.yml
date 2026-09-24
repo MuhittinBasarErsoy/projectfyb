@@ -38,7 +38,11 @@ services:
       MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?MSSQL_SA_PASSWORD tanimlanmali}
       MSSQL_PID: ${MSSQL_PID:-Developer}
       TZ: Europe/Istanbul
-    # Port yayınlanmaz; veritabanına yalnızca Docker ağı içinden erişilir.
+    # SSMS vb. için port yalnızca MSSQL_BIND adresinde açılır. Varsayılan 127.0.0.1:
+    # sunucunun dışından erişilemez (SSH tüneli gerekir). Tailnet'ten doğrudan erişim için
+    # .env'de MSSQL_BIND'i sunucunun Tailscale IP'si yapın (0.0.0.0 KULLANMAYIN).
+    ports:
+      - "${MSSQL_BIND:-127.0.0.1}:${MSSQL_PORT:-14330}:1433"
     volumes:
       - mssql-data:/var/opt/mssql
     healthcheck:
