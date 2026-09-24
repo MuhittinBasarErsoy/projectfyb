@@ -1,0 +1,76 @@
+# Tailscale üzerinden canlı yayın — sunucuda hiçbir port dışarı açılmaz.
+#
+#   cp .env.example .env   # TS_AUTHKEY, JWT_KEY, MSSQL_SA_PASSWORD doldurun
+#   docker compose -f docker-compose.tailscale.yml up -d --build
+#
+# Adres (MagicDNS): https://<TS_HOSTNAME>.<tailnet>.ts.net
+# TLS sertifikasını Tailscale sağlar (admin konsolu → DNS → HTTPS Certificates açık olmalı).
+# Ayrıntılar: docs/DEPLOY.md
+
+name: fyblue
+
+services:
+  # Tailnet'e "fyblue" adıyla katılan düğüm; 443'ü uygulamaya aktarır.
+  ts:
+    image: tailscale/tailscale:latest
+    container_name: fyblue-ts
+    depends_on:
+      - app
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY:?TS_AUTHKEY tanimlanmali - Tailscale admin konsolundan uretin}
+      TS_HOSTNAME: ${TS_HOSTNAME:-fyblue}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_SERVE_CONFIG: /config/serve.json
+      # Kullanıcı alanı ağı: /dev/net/tun ve NET_ADMIN yetkisi gerektirmez.
+      TS_USERSPACE: "true"
+      TS_EXTRA_ARGS: ${TS_EXTRA_ARGS:-}
+    volumes:
+      # Düğüm kimliği; silinirse tailnet'e yeni cihaz olarak katılır.
+      - ts-state:/var/lib/tailscale
+      - ./docker/tailscale/serve.json:/config/serve.json:ro
+    restart: unless-stopped
+
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: fyblue-mssql
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?MSSQL_SA_PASSWORD tanimlanmali}
+      MSSQL_PID: ${MSSQL_PID:-Developer}
+      TZ: Europe/Istanbul
+    # Port yayınlanmaz; veritabanına yalnızca Docker ağı içinden erişilir.
+    volumes:
+      - mssql-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -C -Q \"SELECT 1\" || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fyblue:${IMAGE_TAG:-latest}
+    container_name: fyblue-app
+    depends_on:
+      mssql:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__Default: "Server=mssql,1433;Database=FyBlue;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True;Connect Timeout=60"
+      Jwt__Key: ${JWT_KEY:?JWT_KEY tanimlanmali (en az 32 karakter)}
+      Hangfire__User: ${HANGFIRE_USER:-admin}
+      Hangfire__Password: ${HANGFIRE_PASSWORD:-}
+      ExposeApiDocs: ${EXPOSE_API_DOCS:-false}
+      TZ: Europe/Istanbul
+    volumes:
+      # Data Protection anahtarları: silinirse saklanan OSOS/EPİAŞ şifreleri çözülemez.
+      - fyblue-keys:/var/lib/fyblue/keys
+    restart: unless-stopped
+
+volumes:
+  mssql-data:
+  fyblue-keys:
+  ts-state:
