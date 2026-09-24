@@ -1,0 +1,46 @@
+@implements IDisposable
+@inject ConnectionsState Connections
+
+@* Modül sayfalarını sarar: ilgili dış hesap bağlı değilse içerik yerine bağlama çağrısı gösterir. *@
+@if (_error is not null)
+{
+    <Alert Kind="error" Text="@_error" />
+}
+else if (!Connections.Loaded)
+{
+    <div class="card"><SkeletonRows Rows="3" /></div>
+}
+else if (Connections.Get(System)?.Linked == true)
+{
+    @ChildContent
+}
+else
+{
+    <div class="card">
+        <EmptyState Icon="link" Title="@($"{Label} hesabı bağlı değil")"
+                    Text="@($"Bu modül {Label} kullanıcı adı ve şifrenizle çalışır. FyBlue girişinizden bağımsızdır; bir kez bağlamanız yeterli.")">
+            <a class="btn btn-primary" href="settings/connections">
+                <Icon Name="link" Size="16" /> @Label hesabını bağla
+            </a>
+        </EmptyState>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public ExternalSystem System { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private string? _error;
+    private string Label => System == ExternalSystem.Osos ? "OSOS" : "EPİAŞ";
+
+    protected override async Task OnInitializedAsync()
+    {
+        Connections.Changed += OnChanged;
+        try { await Connections.EnsureLoadedAsync(); }
+        catch (ApiException ex) { _error = ex.Message; }
+    }
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Connections.Changed -= OnChanged;
+}

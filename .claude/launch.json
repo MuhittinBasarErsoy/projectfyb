@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "fyblue",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "src/FyBlue.Server", "--launch-profile", "http"],
+      "port": 5151
+    }
+  ]
+}

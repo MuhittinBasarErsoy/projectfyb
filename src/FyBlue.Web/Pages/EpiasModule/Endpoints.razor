@@ -1,0 +1,179 @@
+@page "/epias/endpoints"
+@implements IDisposable
+@inject EpiasApiClient Api
+@inject ConnectionsState Connections
+@inject NavigationManager Nav
+
+<PageHeader Module="epias" Title="Servisler" Subtitle="Swagger'dan üretilen katalog. Her veri servisi kendi tablosuna tekrarsız yazılır." />
+
+<section class="card">
+    <div class="filter-bar">
+        <label class="search-input">
+            <Icon Name="search" Size="16" />
+            <input type="search" placeholder="Ad, anahtar veya yol ara…" value="@_search" @oninput="OnSearchInput" aria-label="Servis ara" />
+        </label>
+        <select @bind="_tag" @bind:after="LoadAsync" aria-label="Kategori">
+            <option value="">Tüm kategoriler</option>
+            @foreach (var tag in _tags) { <option value="@tag">@Pretty(tag)</option> }
+        </select>
+        <label class="check">
+            <input type="checkbox" @bind="_includeExport" @bind:after="LoadAsync" />
+            <span>Export servisleri</span>
+        </label>
+    </div>
+</section>
+
+<Alert Kind="error" Text="@_error" OnDismiss="() => _error = null" />
+
+@if (_lastResult is not null)
+{
+    <Alert Kind="@(_lastResult.Success ? "ok" : "error")" OnDismiss="() => _lastResult = null">
+        @if (_lastResult.Success)
+        {
+            <text><strong>@_lastResult.EndpointKey</strong>: @_lastResult.Fetched satır çekildi, @_lastResult.Inserted yeni kayıt, @_lastResult.Duplicates kopya atlandı (@_lastResult.ElapsedMs ms).</text>
+        }
+        else
+        {
+            <text><strong>@_lastResult.EndpointKey</strong>: @_lastResult.Error</text>
+        }
+    </Alert>
+}
+
+<section class="card card-flush">
+    @if (_loading && _endpoints.Count == 0)
+    {
+        <div class="card-pad"><SkeletonRows Rows="6" /></div>
+    }
+    else if (_endpoints.Count == 0)
+    {
+        <EmptyState Icon="search" Title="Sonuç yok" Text="Arama veya kategori filtresini değiştirin." />
+    }
+    else
+    {
+        <div class="table-caption">@_endpoints.Count servis</div>
+        <div class="table-wrap">
+            <table class="table">
+                <thead>
+                    <tr><th>Servis</th><th>Tablo</th><th class="num">Satır</th><th>Son çekim</th><th></th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var ep in _endpoints)
+                    {
+                        <tr>
+                            <td>
+                                <a class="cell-title" href="@DetailHref(ep.Key)">@ep.Title</a>
+                                <div class="cell-sub"><code>@ep.Path</code></div>
+                            </td>
+                            <td><code>@(ep.IsExport ? "—" : ep.TableName)</code></td>
+                            <td class="num">@(ep.IsExport ? "—" : ep.RowCount.ToString("N0"))</td>
+                            <td>@(ep.LastSyncedAt?.ToLocalTime().ToString("dd.MM.yyyy HH:mm") ?? "—")</td>
+                            <td class="actions">
+                                @if (!ep.IsExport)
+                                {
+                                    <button class="btn btn-sm" @onclick="() => Nav.NavigateTo(DetailHref(ep.Key))">Aç</button>
+                                    <button class="btn btn-sm btn-primary" disabled="@(_syncingKey == ep.Key || !EpiasLinked)"
+                                            title="@(EpiasLinked ? (ep.RequiresParameters ? "Parametre gerekli — detayda çalıştırın" : "Son 7 günü çek") : "Önce EPİAŞ hesabını bağlayın")"
+                                            @onclick="() => SyncAsync(ep)">
+                                        @if (_syncingKey == ep.Key) { <Spinner Small /> } else { <text>Çek</text> }
+                                    </button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@code {
+    private List<EndpointSummaryDto> _endpoints = new();
+    private List<string> _tags = new();
+    private string _search = "";
+    private string _tag = "";
+    private bool _includeExport;
+    private bool _loading = true;
+    private string? _error;
+    private string? _syncingKey;
+    private SyncResultDto? _lastResult;
+    private CancellationTokenSource? _debounce;
+
+    private bool EpiasLinked => Connections.Epias?.Linked == true;
+
+    private static string DetailHref(string key) => $"epias/endpoints/{Uri.EscapeDataString(key)}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        Connections.Changed += OnChanged;
+        _ = Connections.EnsureLoadedAsync();
+        try { _tags = await Api.GetTagsAsync(); }
+        catch (ApiException ex) { _error = ex.Message; }
+        await LoadAsync();
+    }
+
+    private async Task OnSearchInput(ChangeEventArgs e)
+    {
+        _search = e.Value?.ToString() ?? "";
+
+        // Her tuşta istek atmamak için kısa bir bekleme.
+        _debounce?.Cancel();
+        _debounce = new CancellationTokenSource();
+        var token = _debounce.Token;
+        try
+        {
+            await Task.Delay(300, token);
+            await LoadAsync();
+        }
+        catch (TaskCanceledException) { /* yeni tuş geldi */ }
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try { _endpoints = await Api.GetEndpointsAsync(_tag, _search, _includeExport); }
+        catch (ApiException ex) { _error = ex.Message; }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SyncAsync(EndpointSummaryDto ep)
+    {
+        if (ep.RequiresParameters)
+        {
+            // Zorunlu ek parametreleri olan servisler detay ekranından çalıştırılır.
+            Nav.NavigateTo(DetailHref(ep.Key));
+            return;
+        }
+
+        _syncingKey = ep.Key;
+        _lastResult = null;
+        try
+        {
+            _lastResult = await Api.SyncAsync(new SyncRequest
+            {
+                EndpointKey = ep.Key,
+                StartDate = EpiasApiClient.ToOffset(DateTime.Today.AddDays(-7)),
+                EndDate = EpiasApiClient.ToOffset(DateTime.Today, endOfDay: true)
+            });
+            await LoadAsync();
+        }
+        catch (ApiException ex) { _error = ex.Message; }
+        finally { _syncingKey = null; }
+    }
+
+    private static string Pretty(string tag) => tag
+        .Replace("-data-controller", "")
+        .Replace("-export-controller", " (export)")
+        .Replace('-', ' ');
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Connections.Changed -= OnChanged;
+        _debounce?.Cancel();
+    }
+}

@@ -1,0 +1,156 @@
+@page "/osos/history"
+@inject OsosApiClient Api
+@inject IJSRuntime JS
+
+<PageHeader Module="osos" Title="Sorgu Geçmişi" Subtitle="Kaydedilen sorgular; sonucu görüntüleyin, CSV indirin veya tek tıkla tekrar çalıştırın.">
+    <Actions>
+        <button class="btn" @onclick="Load" disabled="@_loading"><Icon Name="refresh" Size="16" /> Yenile</button>
+    </Actions>
+</PageHeader>
+
+<Alert Kind="@(_ok ? "ok" : "error")" Text="@_msg" OnDismiss="() => _msg = null" />
+
+<section class="card card-flush">
+    @if (_page is null)
+    {
+        <div class="card-pad"><SkeletonRows Rows="5" /></div>
+    }
+    else if (_page.Items.Count == 0)
+    {
+        <EmptyState Icon="history" Title="Henüz sorgu yok" Text="Sorgu sayfasından yaptığınız her arama burada listelenir.">
+            <a class="btn btn-primary" href="osos/query"><Icon Name="search" Size="16" /> Sorguya git</a>
+        </EmptyState>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table">
+                <thead>
+                    <tr><th>#</th><th>Ekran</th><th>Serno</th><th>Tarih aralığı</th><th class="num">Satır</th><th>Oluşturma</th><th></th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var h in _page.Items)
+                    {
+                        <tr class="@(h.Id == _viewId ? "is-selected" : "")">
+                            <td class="muted">@h.Id</td>
+                            <td>
+                                <div class="cell-title">@Pages.Overview.ScreenName(h.Screen)</div>
+                                <div class="cell-sub"><code>@h.MethodName</code></div>
+                            </td>
+                            <td>@h.Serno</td>
+                            <td>@(h.StartDate?.ToString("dd.MM.yy"))–@(h.EndDate?.ToString("dd.MM.yy"))</td>
+                            <td class="num">@h.RowCount</td>
+                            <td>@h.CreatedAt.ToLocalTime().ToString("dd.MM.yy HH:mm")</td>
+                            <td class="actions">
+                                <button class="icon-btn" title="Görüntüle" @onclick="() => View(h.Id)"><Icon Name="eye" Size="16" /></button>
+                                <button class="icon-btn" title="CSV indir" @onclick="() => Download(h.Id)"><Icon Name="download" Size="16" /></button>
+                                <button class="icon-btn" title="Tekrar çalıştır" @onclick="() => Rerun(h.Id)"><Icon Name="play" Size="16" /></button>
+                                <button class="icon-btn icon-btn-danger" title="Sil" @onclick="() => Delete(h.Id)"><Icon Name="trash" Size="16" /></button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_page.Total > _page.PageSize)
+        {
+            <div class="pager">
+                <button class="btn btn-sm" disabled="@(_pageNo <= 1)" @onclick="() => Go(_pageNo - 1)"><Icon Name="chevron-left" Size="15" /></button>
+                <span>Sayfa @_pageNo / @PageCount</span>
+                <button class="btn btn-sm" disabled="@(_pageNo >= PageCount)" @onclick="() => Go(_pageNo + 1)"><Icon Name="chevron-right" Size="15" /></button>
+            </div>
+        }
+    }
+</section>
+
+@if (_snapshot is not null)
+{
+    <section class="card">
+        <div class="toolbar">
+            <h2>Kayıtlı sonuç <span class="muted">#@_viewId</span></h2>
+            <span class="toolbar-spacer"></span>
+            <div class="segmented segmented-sm">
+                <button class="@(_view == "table" ? "is-active" : "")" @onclick='() => _view = "table"'><Icon Name="table" Size="15" /> Tablo</button>
+                <button class="@(_view == "chart" ? "is-active" : "")" @onclick='() => _view = "chart"'><Icon Name="chart" Size="15" /> Grafik</button>
+            </div>
+            <button class="icon-btn" title="Kapat" @onclick="() => _snapshot = null"><Icon Name="x" Size="16" /></button>
+        </div>
+        @if (_view == "table") { <ResultTable Json="@_snapshot.ResultJson" /> }
+        else { <ResultChart Json="@_snapshot.ResultJson" /> }
+    </section>
+}
+
+@code {
+    private const int PageSize = 25;
+
+    private PagedResult<SearchHistoryDto>? _page;
+    private SearchResultDto? _snapshot;
+    private long _viewId;
+    private int _pageNo = 1;
+    private string _view = "table";
+    private string? _msg;
+    private bool _ok, _loading;
+
+    private int PageCount => _page is null ? 1 : Math.Max(1, (int)Math.Ceiling(_page.Total / (double)_page.PageSize));
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Go(int page)
+    {
+        _pageNo = page;
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        _loading = true;
+        try { _page = await Api.GetHistoryAsync(_pageNo, PageSize); }
+        catch (ApiException ex) { _ok = false; _msg = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private async Task View(long id)
+    {
+        try
+        {
+            _snapshot = await Api.GetSnapshotAsync(id);
+            _viewId = id;
+            _view = "table";
+        }
+        catch (ApiException ex) { _ok = false; _msg = ex.Message; }
+    }
+
+    private async Task Rerun(long id)
+    {
+        _ok = true; _msg = "Tekrar çalıştırılıyor…";
+        try
+        {
+            var res = await Api.RerunAsync(id);
+            _msg = $"Tekrar çalıştı: {res?.RowCount ?? 0} satır, yeni kayıt #{res?.SearchHistoryId}.";
+            _pageNo = 1;
+            await Load();
+        }
+        catch (ApiException ex) { _ok = false; _msg = ex.Message; }
+    }
+
+    private async Task Delete(long id)
+    {
+        try
+        {
+            await Api.DeleteAsync(id);
+            if (_viewId == id) _snapshot = null;
+            await Load();
+        }
+        catch (ApiException ex) { _ok = false; _msg = ex.Message; }
+    }
+
+    private async Task Download(long id)
+    {
+        try
+        {
+            var f = await Api.ExportCsvAsync(id);
+            await JS.InvokeVoidAsync("fyblue.download", f.FileName, Convert.ToBase64String(f.Bytes), "text/csv");
+        }
+        catch (ApiException ex) { _ok = false; _msg = ex.Message; }
+    }
+}

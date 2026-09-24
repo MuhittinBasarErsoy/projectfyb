@@ -1,0 +1,49 @@
+@page "/settings/connections"
+@implements IDisposable
+@inject ConnectionsState State
+
+<PageHeader Title="Bağlı Hesaplar"
+            Subtitle="OSOS ve EPİAŞ, FyBlue girişinizden bağımsız kendi kullanıcı adı/şifreleriyle çalışır. Şifreler sunucuda şifrelenmiş olarak saklanır." />
+
+@if (Welcome)
+{
+    <Alert Kind="ok">
+        <strong>Hesabınız oluşturuldu.</strong> Kullanmak istediğiniz modülün hesabını aşağıdan bağlayın — ikisini de bağlamak zorunda değilsiniz.
+    </Alert>
+}
+
+<Alert Kind="error" Text="@_loadError" />
+
+<div class="grid-2">
+    <ConnectionCard System="ExternalSystem.Osos"
+                    Title="OSOS"
+                    Description="UEDAŞ OSOS portalı (osos.uedas.com.tr) kullanıcı kodu ve şifreniz. Tüketim, endeks, profil sorguları ve zamanlanmış işler bu hesapla yapılır."
+                    UserLabel="OSOS kullanıcı kodu"
+                    Status="@State.Osos"
+                    Loaded="@State.Loaded" />
+
+    <ConnectionCard System="ExternalSystem.Epias"
+                    Title="EPİAŞ Şeffaflık"
+                    Description="EPİAŞ Şeffaflık Platformu kullanıcı adı ve şifreniz. Kimlik doğrulaması doğrudan EPİAŞ (giris.epias.com.tr) tarafından yapılır."
+                    UserLabel="EPİAŞ kullanıcı adı"
+                    Status="@State.Epias"
+                    Loaded="@State.Loaded" />
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "welcome")] public int? WelcomeFlag { get; set; }
+
+    private bool Welcome => WelcomeFlag == 1;
+    private string? _loadError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        State.Changed += OnChanged;
+        try { await State.RefreshAsync(); }
+        catch (ApiException ex) { _loadError = ex.Message; }
+    }
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => State.Changed -= OnChanged;
+}

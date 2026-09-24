@@ -1,0 +1,155 @@
+@page "/"
+@implements IDisposable
+@inject AuthState Auth
+@inject ConnectionsState Connections
+@inject OsosApiClient OsosApi
+@inject EpiasApiClient EpiasApi
+
+<PageHeader Title="@($"Merhaba, {Auth.Username}")" Subtitle="OSOS ve EPİAŞ modüllerinizin özeti." />
+
+<div class="grid-2">
+    @* ---------------- OSOS ---------------- *@
+    <section class="card module-card module-accent-osos">
+        <div class="module-card-head">
+            <div class="module-icon"><Icon Name="gauge" Size="20" /></div>
+            <div>
+                <h2>OSOS</h2>
+                <span class="muted">UEDAŞ sayaç verileri</span>
+            </div>
+            <ConnectionBadge Status="@Connections.Osos" />
+        </div>
+
+        @if (Connections.Osos is { Linked: false })
+        {
+            <p class="muted">Sorgu yapabilmek için OSOS kullanıcı kodu ve şifrenizi bağlayın.</p>
+            <a class="btn btn-primary" href="settings/connections"><Icon Name="link" Size="16" /> OSOS hesabını bağla</a>
+        }
+
+        <h3 class="section-title">Son sorgular</h3>
+        @if (_ososError is not null)
+        {
+            <p class="muted">@_ososError</p>
+        }
+        else if (_recent is null)
+        {
+            <SkeletonRows Rows="3" />
+        }
+        else if (_recent.Count == 0)
+        {
+            <p class="muted">Henüz sorgu yok.</p>
+        }
+        else
+        {
+            <ul class="activity">
+                @foreach (var h in _recent)
+                {
+                    <li>
+                        <span class="activity-icon"><Icon Name="search" Size="14" /></span>
+                        <span class="activity-text">
+                            <strong>@ScreenName(h.Screen)</strong>
+                            <span class="muted">@(h.RowCount ?? 0) satır</span>
+                        </span>
+                        <span class="activity-time">@h.CreatedAt.ToLocalTime().ToString("dd.MM HH:mm")</span>
+                    </li>
+                }
+            </ul>
+        }
+
+        <div class="module-links">
+            <a href="osos/query"><Icon Name="search" Size="16" /> Yeni sorgu</a>
+            <a href="osos/history"><Icon Name="history" Size="16" /> Geçmiş</a>
+            <a href="osos/jobs"><Icon Name="clock" Size="16" /> İşler</a>
+        </div>
+    </section>
+
+    @* ---------------- EPİAŞ ---------------- *@
+    <section class="card module-card module-accent-epias">
+        <div class="module-card-head">
+            <div class="module-icon"><Icon Name="zap" Size="20" /></div>
+            <div>
+                <h2>EPİAŞ</h2>
+                <span class="muted">Şeffaflık Platformu</span>
+            </div>
+            <ConnectionBadge Status="@Connections.Epias" />
+        </div>
+
+        @if (Connections.Epias is { Linked: false })
+        {
+            <p class="muted">Veri çekebilmek için EPİAŞ kullanıcı adı ve şifrenizi bağlayın.</p>
+            <a class="btn btn-primary" href="settings/connections"><Icon Name="link" Size="16" /> EPİAŞ hesabını bağla</a>
+        }
+
+        <h3 class="section-title">Katalog</h3>
+        @if (_epiasError is not null)
+        {
+            <p class="muted">@_epiasError</p>
+        }
+        else if (_epiasStats is null)
+        {
+            <SkeletonRows Rows="2" />
+        }
+        else
+        {
+            <div class="mini-stats">
+                <div><strong>@_epiasStats.Value.Data</strong><span>veri servisi</span></div>
+                <div><strong>@_epiasStats.Value.Synced</strong><span>senkronize</span></div>
+                <div><strong>@_epiasStats.Value.Total</strong><span>toplam operasyon</span></div>
+            </div>
+        }
+
+        <div class="module-links">
+            <a href="epias"><Icon Name="gauge" Size="16" /> Toplu senkron</a>
+            <a href="epias/endpoints"><Icon Name="layers" Size="16" /> Servisler</a>
+            <a href="epias/formulas"><Icon Name="function" Size="16" /> Formüller</a>
+        </div>
+    </section>
+</div>
+
+@code {
+    private IReadOnlyList<global::Osos.Contracts.SearchHistoryDto>? _recent;
+    private (int Total, int Data, int Synced)? _epiasStats;
+    private string? _ososError, _epiasError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Connections.Changed += OnChanged;
+
+        var history = LoadHistoryAsync();
+        var epias = LoadEpiasAsync();
+        await Task.WhenAll(history, epias);
+    }
+
+    private async Task LoadHistoryAsync()
+    {
+        try { _recent = (await OsosApi.GetHistoryAsync(1, 5))?.Items ?? Array.Empty<global::Osos.Contracts.SearchHistoryDto>(); }
+        catch (ApiException ex) { _ososError = ex.Message; }
+    }
+
+    private async Task LoadEpiasAsync()
+    {
+        try
+        {
+            if (await EpiasApi.GetSyncStatusAsync() is { } s)
+                _epiasStats = (GetInt(s, "totalOperations"), GetInt(s, "dataEndpoints"), GetInt(s, "syncedEndpoints"));
+        }
+        catch (ApiException ex) { _epiasError = ex.Message; }
+    }
+
+    private static int GetInt(JsonElement el, string name) =>
+        el.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetInt32() : 0;
+
+    internal static string ScreenName(string screen) => screen switch
+    {
+        "Consumption" => "Tüketim",
+        "Endex" => "Endeks",
+        "Profiles" => "Akım/Gerilim/Cosφ",
+        "Subscriptions" => "Aboneler",
+        "Dashboard" => "Dashboard",
+        "Weather" => "Hava durumu",
+        _ => screen
+    };
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Connections.Changed -= OnChanged;
+}

@@ -1,0 +1,230 @@
+@page "/osos/jobs"
+@inject OsosApiClient Api
+@inject ConnectionsState Connections
+
+<PageHeader Module="osos" Title="Zamanlanmış İşler" Subtitle="Sorguları hemen kuyruğa alın veya cron ile düzenli çalıştırın. Sonuçlar Geçmiş'e kaydedilir.">
+    <Actions>
+        <a class="btn" href="hangfire" target="_blank" rel="noopener"><Icon Name="external" Size="16" /> Hangfire paneli</a>
+    </Actions>
+</PageHeader>
+
+@if (_screen != "Weather" && Connections.Osos is { Linked: false })
+{
+    <Alert Kind="warn">
+        OSOS sorgu işleri için hesabınızı bağlamanız gerekir. <a href="settings/connections">Bağlı Hesaplar →</a>
+        Hava durumu işleri OSOS hesabı olmadan da çalışır.
+    </Alert>
+}
+
+<section class="card">
+    <h2>Yeni iş</h2>
+    <div class="form-grid">
+        <label class="field">
+            <span>Sorgu</span>
+            <select @bind="_screen">
+                <option value="Consumption">Tüketim</option>
+                <option value="Endex">Endeks</option>
+                <option value="Profiles">Akım/Gerilim/Cosφ</option>
+                <option value="Subscriptions">Aboneler</option>
+                <option value="Dashboard">Dashboard (Owner tüketim)</option>
+                <option value="Weather">Hava Durumu (Open-Meteo)</option>
+            </select>
+        </label>
+        @if (_screen == "Weather")
+        {
+            <label class="field"><span>Enlem</span><input type="number" step="any" @bind="_lat" /></label>
+            <label class="field"><span>Boylam</span><input type="number" step="any" @bind="_lon" /></label>
+            <label class="field"><span>Saat dilimi</span><input @bind="_tz" /></label>
+            <label class="field"><span>Son kaç gün</span><input type="number" @bind="_daysBack" min="0" /></label>
+            <label class="field"><span>Tilt (ops.)</span><input type="number" step="any" @bind="_tilt" /></label>
+            <label class="field"><span>Azimuth (ops.)</span><input type="number" step="any" @bind="_azimuth" /></label>
+        }
+        else
+        {
+            <label class="field">
+                <span>Tesisat (Serno)</span>
+                <select @bind="_serno">
+                    <option value="0">Otomatik (müşteri)</option>
+                    @foreach (var s in _subs) { <option value="@s.Serno">@s.Label @(s.Serno > 0 ? $"(#{s.Serno})" : "")</option> }
+                </select>
+            </label>
+            @if (_screen != "Subscriptions")
+            {
+                <label class="field"><span>Son kaç gün</span><input type="number" @bind="_daysBack" min="0" /></label>
+            }
+            @if (_screen == "Consumption")
+            {
+                <label class="field"><span>Tip</span><input type="number" @bind="_type" /></label>
+            }
+        }
+    </div>
+
+    <div class="form-grid">
+        <label class="field">
+            <span>Zamanlama</span>
+            <select @bind="_cronPreset">
+                <option value="">Anlık (zamanlama yok)</option>
+                <option value="0 * * * *">Her saat başı</option>
+                <option value="*/15 * * * *">Her 15 dakikada</option>
+                <option value="0 8 * * *">Her gün 08:00</option>
+                <option value="0 8 * * 1">Her Pazartesi 08:00</option>
+                <option value="0 0 1 * *">Her ayın 1'i 00:00</option>
+                <option value="custom">Özel cron…</option>
+            </select>
+        </label>
+        @if (_cronPreset == "custom")
+        {
+            <label class="field"><span>Özel cron</span><input @bind="_customCron" placeholder="dk sa gün ay haftagünü" /></label>
+        }
+        <label class="field"><span>İsim (opsiyonel)</span><input @bind="_name" placeholder="ör. gunluk-tuketim" /></label>
+    </div>
+
+    <div class="btn-row">
+        <button class="btn btn-primary" disabled="@_busy" @onclick="RunNow"><Icon Name="play" Size="16" /> Şimdi çalıştır</button>
+        <button class="btn" disabled="@(_busy || EffectiveCron == "")" @onclick="Schedule"><Icon Name="calendar" Size="16" /> Zamanla</button>
+    </div>
+    <Alert Kind="@(_ok ? "ok" : "error")" Text="@_msg" />
+</section>
+
+<section class="card card-flush">
+    <div class="toolbar card-pad">
+        <h2>Zamanlanmış işler</h2>
+        <span class="toolbar-spacer"></span>
+        <button class="btn btn-sm" @onclick="Load"><Icon Name="refresh" Size="15" /> Yenile</button>
+    </div>
+    @if (_jobs is null)
+    {
+        <div class="card-pad"><SkeletonRows Rows="3" /></div>
+    }
+    else if (_jobs.Count == 0)
+    {
+        <EmptyState Icon="clock" Title="Zamanlanmış iş yok" Text="Yukarıdan bir zamanlama seçip “Zamanla”ya basın." />
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table">
+                <thead>
+                    <tr><th>İsim</th><th>Sorgu</th><th>Serno</th><th class="num">Gün</th><th>Cron</th><th>Sonraki</th><th>Son</th><th>Durum</th><th></th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var j in _jobs)
+                    {
+                        <tr>
+                            <td title="@j.Id"><span class="cell-title">@ShortId(j.Id)</span></td>
+                            <td>@Pages.Overview.ScreenName(j.Screen)</td>
+                            <td>@(j.Serno == 0 ? "oto" : j.Serno.ToString())</td>
+                            <td class="num">@j.DaysBack</td>
+                            <td><code>@j.Cron</code></td>
+                            <td>@j.NextRun</td>
+                            <td>@j.LastRun</td>
+                            <td><StateBadge State="@j.LastState" /></td>
+                            <td class="actions">
+                                <button class="icon-btn" title="Şimdi tetikle" @onclick="() => Trigger(j.Id)"><Icon Name="play" Size="16" /></button>
+                                <button class="icon-btn icon-btn-danger" title="Sil" @onclick="() => Delete(j.Id)"><Icon Name="trash" Size="16" /></button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@code {
+    private string _screen = "Consumption";
+    private long _serno;
+    private int _daysBack = 1;
+    private int _type = 2;
+    private string _cronPreset = "";
+    private string _customCron = "";
+    private string? _name;
+    private double _lat = 40.195, _lon = 29.060;
+    private string _tz = "Europe/Istanbul";
+    private double? _tilt, _azimuth;
+    private bool _busy, _ok;
+    private string? _msg;
+    private List<JobDto>? _jobs;
+    private List<SubscriptionItem> _subs = new();
+
+    private string EffectiveCron => _cronPreset == "custom" ? _customCron.Trim() : _cronPreset;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Connections.EnsureLoadedAsync();
+        if (Connections.Osos?.Linked == true)
+        {
+            try
+            {
+                var me = await Api.GetMeAsync();
+                if (me is not null) _subs = SubscriptionParser.Parse(me.Subscriptions);
+            }
+            catch (ApiException) { /* opsiyonel */ }
+        }
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        try { _jobs = await Api.GetJobsAsync() ?? new(); }
+        catch (ApiException ex) { _msg = ex.Message; _ok = false; _jobs ??= new(); }
+    }
+
+    private WeatherJobRequest WeatherReq(string? cron) => new(_lat, _lon, _daysBack, _tz, _tilt, _azimuth, cron, _name);
+
+    private async Task RunNow()
+    {
+        _busy = true; _msg = null;
+        try
+        {
+            if (_screen == "Weather") await Api.WeatherRunNowAsync(WeatherReq(null));
+            else await Api.RunNowAsync(new RunNowRequest(_screen, _serno, _daysBack, _type));
+            _ok = true;
+            _msg = "İş kuyruğa alındı — birkaç saniye içinde çalışır ve Geçmiş'te görünür.";
+        }
+        catch (ApiException ex) { _ok = false; _msg = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task Schedule()
+    {
+        _busy = true; _msg = null;
+        try
+        {
+            if (_screen == "Weather") await Api.WeatherScheduleAsync(WeatherReq(EffectiveCron));
+            else await Api.ScheduleJobAsync(new ScheduleJobRequest(_screen, _serno, _daysBack, _type, EffectiveCron, _name));
+            _ok = true;
+            _msg = "Zamanlanmış iş oluşturuldu.";
+            await Load();
+        }
+        catch (ApiException ex) { _ok = false; _msg = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task Trigger(string id)
+    {
+        try
+        {
+            await Api.TriggerJobAsync(id);
+            _ok = true; _msg = "İş tetiklendi.";
+            await Load();
+        }
+        catch (ApiException ex) { _ok = false; _msg = ex.Message; }
+    }
+
+    private async Task Delete(string id)
+    {
+        try
+        {
+            await Api.DeleteJobAsync(id);
+            await Load();
+        }
+        catch (ApiException ex) { _ok = false; _msg = ex.Message; }
+    }
+
+    private static string ShortId(string id)
+    {
+        var parts = id.Split(':');
+        return parts.Length > 0 ? parts[^1] : id;
+    }
+}

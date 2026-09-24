@@ -1,0 +1,29 @@
+<PageTitle>@Title · FyBlue</PageTitle>
+
+<header class="page-header">
+    <div class="page-header-text">
+        @if (Module is not null)
+        {
+            <span class="module-tag module-@Module.ToLowerInvariant()">@ModuleLabel</span>
+        }
+        <h1>@Title</h1>
+        @if (Subtitle is not null)
+        {
+            <p class="page-subtitle">@Subtitle</p>
+        }
+    </div>
+    @if (Actions is not null)
+    {
+        <div class="page-actions">@Actions</div>
+    }
+</header>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string? Subtitle { get; set; }
+    /// <summary>"osos" / "epias" — başlığın üstünde modül etiketi gösterir.</summary>
+    [Parameter] public string? Module { get; set; }
+    [Parameter] public RenderFragment? Actions { get; set; }
+
+    private string ModuleLabel => Module?.ToLowerInvariant() == "osos" ? "OSOS" : "EPİAŞ";
+}

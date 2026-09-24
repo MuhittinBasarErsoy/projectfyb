@@ -1,0 +1,20 @@
+@if (!string.IsNullOrWhiteSpace(State))
+{
+    <span class="badge @Css">@State</span>
+}
+else
+{
+    <span class="muted">—</span>
+}
+
+@code {
+    [Parameter] public string? State { get; set; }
+
+    private string Css => State switch
+    {
+        "Succeeded" => "badge-ok",
+        "Failed" => "badge-error",
+        "Processing" or "Enqueued" or "Scheduled" => "badge-info",
+        _ => ""
+    };
+}

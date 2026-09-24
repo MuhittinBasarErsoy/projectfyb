@@ -1,0 +1,18 @@
+@if (Status is null)
+{
+    <span class="badge push-right">…</span>
+}
+else if (Status.Linked)
+{
+    <a class="badge badge-ok push-right" href="settings/connections" title="@Status.Username">
+        <Icon Name="check" Size="12" Stroke="2.6" /> Bağlı
+    </a>
+}
+else
+{
+    <a class="badge badge-warn push-right" href="settings/connections">Bağlı değil</a>
+}
+
+@code {
+    [Parameter] public ExternalAccountStatus? Status { get; set; }
+}

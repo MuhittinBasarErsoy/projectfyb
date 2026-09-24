@@ -1,0 +1,85 @@
+@page "/register"
+@layout AuthLayout
+@inject AuthApi AuthApi
+@inject AuthState Auth
+@inject NavigationManager Nav
+
+<PageTitle>Kayıt · FyBlue</PageTitle>
+
+<form class="auth-card" @onsubmit="SubmitAsync" @onsubmit:preventDefault>
+    <div class="auth-card-head">
+        <h1>Hesap oluşturun</h1>
+        <p>Tek hesap; OSOS ve EPİAŞ bağlantılarınızı sonra eklersiniz.</p>
+    </div>
+
+    <label class="field">
+        <span>Kullanıcı adı</span>
+        <input @bind="_username" @bind:event="oninput" autocomplete="username" required autofocus />
+    </label>
+
+    <label class="field">
+        <span>E-posta</span>
+        <input type="email" @bind="_email" @bind:event="oninput" autocomplete="email" />
+    </label>
+
+    <label class="field">
+        <span>Şifre</span>
+        <input type="password" @bind="_password" @bind:event="oninput" autocomplete="new-password" required />
+        <small class="hint">En az 6 karakter; büyük harf, küçük harf ve rakam içermeli.</small>
+    </label>
+
+    <label class="field">
+        <span>Şifre (tekrar)</span>
+        <input type="password" @bind="_password2" @bind:event="oninput" autocomplete="new-password" required />
+    </label>
+
+    <Alert Kind="error" Text="@_error" />
+
+    <button type="submit" class="btn btn-primary btn-block btn-lg" disabled="@_busy">
+        @if (_busy) { <Spinner Small /> }
+        Kayıt ol
+    </button>
+
+    <p class="auth-switch">Zaten hesabınız var mı? <a href="@LoginHref">Giriş yapın</a></p>
+</form>
+
+@code {
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+
+    private string _username = "", _email = "", _password = "", _password2 = "";
+    private bool _busy;
+    private string? _error;
+
+    private string LoginHref => string.IsNullOrEmpty(ReturnUrl) ? "login" : $"login?returnUrl={Uri.EscapeDataString(ReturnUrl)}";
+
+    protected override void OnInitialized()
+    {
+        if (Auth.IsAuthenticated) Nav.NavigateTo("", replace: true);
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (_busy) return;
+        _error = null;
+        if (string.IsNullOrWhiteSpace(_username) || string.IsNullOrWhiteSpace(_password))
+        {
+            _error = "Kullanıcı adı ve şifre zorunludur.";
+            return;
+        }
+        if (_password != _password2)
+        {
+            _error = "Şifreler eşleşmiyor.";
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await AuthApi.RegisterAsync(_username.Trim(), _email.Trim(), _password);
+            // Yeni kullanıcının ilk işi dış hesapları bağlamak.
+            Nav.NavigateTo("settings/connections?welcome=1", replace: true);
+        }
+        catch (ApiException ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+}

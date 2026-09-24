@@ -1,0 +1,137 @@
+@inject ConnectionsState Connections
+
+<section class="card connection-card module-accent-@(System == ExternalSystem.Osos ? "osos" : "epias")">
+    <div class="connection-head">
+        <div class="connection-logo"><Icon Name="@(System == ExternalSystem.Osos ? "gauge" : "zap")" Size="20" /></div>
+        <div class="connection-title">
+            <h2>@Title</h2>
+            @if (!Loaded)
+            {
+                <span class="badge">Kontrol ediliyor…</span>
+            }
+            else if (Status?.Linked == true)
+            {
+                <span class="badge badge-ok"><Icon Name="check" Size="12" Stroke="2.6" /> Bağlı · @Status.Username</span>
+            }
+            else
+            {
+                <span class="badge badge-muted">Bağlı değil</span>
+            }
+        </div>
+    </div>
+
+    <p class="muted">@Description</p>
+
+    @if (Status?.Linked == true && !_editing)
+    {
+        <dl class="kv">
+            <dt>Kullanıcı</dt><dd>@Status.Username</dd>
+            <dt>Son güncelleme</dt><dd>@(Status.UpdatedAt?.ToLocalTime().ToString("dd.MM.yyyy HH:mm") ?? "—")</dd>
+        </dl>
+        <div class="btn-row">
+            <button class="btn" @onclick="StartEdit"><Icon Name="edit" Size="16" /> Bilgileri güncelle</button>
+            <button class="btn btn-danger-ghost" @onclick="UnlinkAsync" disabled="@_busy">
+                <Icon Name="unlink" Size="16" /> Bağlantıyı kaldır
+            </button>
+        </div>
+    }
+    else
+    {
+        <form class="stack" @onsubmit="LinkAsync" @onsubmit:preventDefault>
+            <label class="field">
+                <span>@UserLabel</span>
+                <input @bind="_username" @bind:event="oninput" autocomplete="off" required />
+            </label>
+            <label class="field">
+                <span>Şifre</span>
+                <input type="password" @bind="_password" @bind:event="oninput" autocomplete="new-password" required />
+            </label>
+            <div class="btn-row">
+                <button type="submit" class="btn btn-primary" disabled="@_busy">
+                    @if (_busy) { <Spinner Small /> } else { <Icon Name="link" Size="16" /> }
+                    Doğrula ve bağla
+                </button>
+                @if (_editing)
+                {
+                    <button type="button" class="btn btn-ghost" @onclick="() => _editing = false">Vazgeç</button>
+                }
+            </div>
+            <p class="hint"><Icon Name="lock" Size="13" /> Bilgiler önce @Title sunucusunda doğrulanır; yalnızca başarılıysa kaydedilir.</p>
+        </form>
+    }
+
+    <Alert Kind="@(_ok ? "ok" : "error")" Text="@_message" />
+</section>
+
+@code {
+    [Parameter, EditorRequired] public ExternalSystem System { get; set; }
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string Description { get; set; } = "";
+    [Parameter] public string UserLabel { get; set; } = "Kullanıcı adı";
+    [Parameter] public ExternalAccountStatus? Status { get; set; }
+    [Parameter] public bool Loaded { get; set; }
+
+    private string _username = "", _password = "";
+    private bool _busy, _editing, _ok;
+    private string? _message;
+
+    private void StartEdit()
+    {
+        _username = Status?.Username ?? "";
+        _password = "";
+        _message = null;
+        _editing = true;
+    }
+
+    private async Task LinkAsync()
+    {
+        if (_busy) return;
+        _message = null;
+        if (string.IsNullOrWhiteSpace(_username) || string.IsNullOrWhiteSpace(_password))
+        {
+            _ok = false;
+            _message = "Kullanıcı adı ve şifre zorunludur.";
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var res = System == ExternalSystem.Osos
+                ? await Connections.LinkOsosAsync(_username.Trim(), _password)
+                : await Connections.LinkEpiasAsync(_username.Trim(), _password);
+            _ok = res.Success;
+            _message = res.Message;
+            if (res.Success)
+            {
+                _password = "";
+                _editing = false;
+            }
+        }
+        catch (ApiException ex)
+        {
+            _ok = false;
+            _message = ex.Message;
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task UnlinkAsync()
+    {
+        _busy = true;
+        _message = null;
+        try
+        {
+            await Connections.UnlinkAsync(System);
+            _username = "";
+            _ok = true;
+            _message = "Bağlantı kaldırıldı; saklanan şifre silindi.";
+        }
+        catch (ApiException ex)
+        {
+            _ok = false;
+            _message = ex.Message;
+        }
+        finally { _busy = false; }
+    }
+}

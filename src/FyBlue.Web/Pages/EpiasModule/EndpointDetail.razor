@@ -1,0 +1,281 @@
+@page "/epias/endpoints/{Key}"
+@inject EpiasApiClient Api
+@inject IJSRuntime JS
+
+<Alert Kind="error" Text="@_error" OnDismiss="() => _error = null" />
+
+@if (_endpoint is null)
+{
+    @if (_error is null)
+    {
+        <div class="card"><SkeletonRows Rows="4" /></div>
+    }
+}
+else
+{
+    <PageHeader Module="epias" Title="@_endpoint.Title">
+        <Actions>
+            <a class="btn btn-ghost" href="epias/endpoints"><Icon Name="arrow-left" Size="16" /> Servisler</a>
+        </Actions>
+    </PageHeader>
+
+    <div class="meta-row">
+        <span class="badge">@_endpoint.Method</span>
+        <code>@_endpoint.Path</code>
+        <Icon Name="arrow-right" Size="14" />
+        <code>epias.@_endpoint.TableName</code>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_endpoint.Description))
+    {
+        <p class="description">@_endpoint.Description</p>
+    }
+
+    <LinkGate System="ExternalSystem.Epias">
+        <section class="card">
+            <h2>Veri çek</h2>
+
+            @if (_endpoint.SupportsDateRange)
+            {
+                <div class="form-grid">
+                    <label class="field"><span>Başlangıç</span><input type="date" @bind="_from" /></label>
+                    <label class="field"><span>Bitiş</span><input type="date" @bind="_to" /></label>
+                    <label class="field"><span>Parça (gün)</span><input type="number" min="0" max="365" @bind="_chunkDays" /></label>
+                </div>
+            }
+
+            @if (Editable.Count > 0)
+            {
+                <div class="form-grid">
+                    @foreach (var p in Editable)
+                    {
+                        <label class="field">
+                            <span>@p.Name @if (p.Required) { <em class="req">*</em> }</span>
+                            @if (p.EnumValues is { Count: > 0 })
+                            {
+                                <select value="@GetParam(p.Name)" @onchange="e => SetParam(p.Name, e.Value?.ToString())">
+                                    <option value=""></option>
+                                    @foreach (var v in p.EnumValues) { <option value="@v">@v</option> }
+                                </select>
+                            }
+                            else
+                            {
+                                <input type="@InputType(p)" value="@GetParam(p.Name)" placeholder="@p.Example"
+                                       @onchange="e => SetParam(p.Name, e.Value?.ToString())" />
+                            }
+                            @if (!string.IsNullOrWhiteSpace(p.Description))
+                            {
+                                <small class="hint">@p.Description</small>
+                            }
+                        </label>
+                    }
+                </div>
+            }
+
+            <div class="btn-row">
+                <button class="btn btn-primary" @onclick="SyncAsync" disabled="@_syncing">
+                    @if (_syncing) { <Spinner Small /> <span>Çekiliyor…</span> }
+                    else { <Icon Name="download" Size="16" /> <span>Çek ve kaydet</span> }
+                </button>
+            </div>
+
+            @if (_syncResult is not null)
+            {
+                <Alert Kind="@(_syncResult.Success ? "ok" : "error")">
+                    @if (_syncResult.Success)
+                    {
+                        <text>@_syncResult.Fetched satır çekildi, @_syncResult.Inserted yeni kayıt eklendi, @_syncResult.Duplicates kopya atlandı (@_syncResult.Requests istek, @_syncResult.ElapsedMs ms).</text>
+                    }
+                    else
+                    {
+                        @_syncResult.Error
+                    }
+                </Alert>
+            }
+        </section>
+    </LinkGate>
+
+    <section class="card card-flush">
+        <div class="toolbar card-pad">
+            <h2>Tablo içeriği <span class="muted">@_total.ToString("N0") satır</span></h2>
+            <span class="toolbar-spacer"></span>
+            <button class="btn btn-sm" @onclick="DownloadCsv" disabled="@(_total == 0)"><Icon Name="download" Size="15" /> CSV</button>
+            <button class="btn btn-sm" @onclick="LoadDataAsync" disabled="@_querying"><Icon Name="refresh" Size="15" /> Yenile</button>
+        </div>
+
+        @if (_rows.Count == 0)
+        {
+            <EmptyState Icon="database" Title="Tablo boş" Text="Bu tabloda henüz kayıt yok. Yukarıdan veri çekin." />
+        }
+        else
+        {
+            <div class="table-wrap table-wrap-tall">
+                <table class="table table-compact">
+                    <thead>
+                        <tr>@foreach (var c in _columns) { <th>@c</th> }</tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            <tr>@foreach (var c in _columns) { <td>@Format(row.GetValueOrDefault(c))</td> }</tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="pager">
+                <button class="btn btn-sm" disabled="@(_page <= 1)" @onclick="() => GoToPage(_page - 1)"><Icon Name="chevron-left" Size="15" /></button>
+                <span>Sayfa @_page / @PageCount</span>
+                <button class="btn btn-sm" disabled="@(_page * PageSize >= _total)" @onclick="() => GoToPage(_page + 1)"><Icon Name="chevron-right" Size="15" /></button>
+            </div>
+        }
+    </section>
+
+    <section class="card card-flush">
+        <div class="card-pad">
+            <h2>Kolonlar</h2>
+            <p class="muted">Formüllerde <code>[@(_endpoint.TableName).kolon_adi]</code> biçiminde kullanılır.</p>
+        </div>
+        <div class="table-wrap">
+            <table class="table">
+                <thead><tr><th>Kolon</th><th>SQL tipi</th><th>Açıklama</th></tr></thead>
+                <tbody>
+                    @foreach (var c in _endpoint.Columns)
+                    {
+                        <tr><td><code>@c.Name</code></td><td>@c.SqlType</td><td>@c.Description</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+}
+
+@code {
+    private const int PageSize = 50;
+
+    [Parameter] public string Key { get; set; } = "";
+
+    private EndpointDetailDto? _endpoint;
+    private readonly Dictionary<string, string?> _parameters = new(StringComparer.OrdinalIgnoreCase);
+
+    private DateTime? _from = DateTime.Today.AddDays(-7);
+    private DateTime? _to = DateTime.Today;
+    private int _chunkDays;
+
+    private bool _syncing, _querying;
+    private string? _error;
+    private SyncResultDto? _syncResult;
+
+    private List<string> _columns = new();
+    private List<Dictionary<string, object?>> _rows = new();
+    private long _total;
+    private int _page = 1;
+
+    private int PageCount => Math.Max(1, (int)Math.Ceiling(_total / (double)PageSize));
+
+    private List<ParameterDto> Editable => _endpoint?.Parameters
+        .Where(p => !p.Name.Equals("startDate", StringComparison.OrdinalIgnoreCase)
+                    && !p.Name.Equals("endDate", StringComparison.OrdinalIgnoreCase))
+        .ToList() ?? new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _error = null;
+        _syncResult = null;
+        _page = 1;
+        _parameters.Clear();
+        try
+        {
+            _endpoint = await Api.GetEndpointAsync(Key);
+            if (_endpoint is not null) await LoadDataAsync();
+        }
+        catch (ApiException ex) { _error = ex.Message; }
+    }
+
+    private string? GetParam(string name) => _parameters.GetValueOrDefault(name);
+
+    private void SetParam(string name, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) _parameters.Remove(name);
+        else _parameters[name] = value;
+    }
+
+    private static string InputType(ParameterDto p) => p.Type switch
+    {
+        "integer" or "number" => "number",
+        _ => "text"
+    };
+
+    private async Task SyncAsync()
+    {
+        if (_endpoint is null) return;
+
+        _syncing = true;
+        _syncResult = null;
+        _error = null;
+        try
+        {
+            _syncResult = await Api.SyncAsync(new SyncRequest
+            {
+                EndpointKey = _endpoint.Key,
+                Parameters = _parameters.ToDictionary(k => k.Key, k => (object?)k.Value),
+                StartDate = _endpoint.SupportsDateRange ? EpiasApiClient.ToOffset(_from) : null,
+                EndDate = _endpoint.SupportsDateRange ? EpiasApiClient.ToOffset(_to, endOfDay: true) : null,
+                ChunkDays = _chunkDays
+            });
+            if (_syncResult?.Success == true) await LoadDataAsync();
+        }
+        catch (ApiException ex) { _error = ex.Message; }
+        finally { _syncing = false; }
+    }
+
+    private async Task GoToPage(int page)
+    {
+        _page = Math.Max(1, page);
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        if (_endpoint is null) return;
+
+        _querying = true;
+        try
+        {
+            var result = await Api.QueryAsync(new TableQueryRequest
+            {
+                EndpointKey = _endpoint.Key,
+                Page = _page,
+                PageSize = PageSize,
+                Descending = true
+            });
+            _columns = result?.Columns ?? new();
+            _rows = result?.Rows ?? new();
+            _total = result?.Total ?? 0;
+        }
+        catch (ApiException ex) { _error = ex.Message; }
+        finally { _querying = false; }
+    }
+
+    private async Task DownloadCsv()
+    {
+        if (_endpoint is null) return;
+        try
+        {
+            var f = await Api.ExportCsvAsync(_endpoint.Key, null, null);
+            await JS.InvokeVoidAsync("fyblue.download", f.FileName, Convert.ToBase64String(f.Bytes), "text/csv");
+        }
+        catch (ApiException ex) { _error = ex.Message; }
+    }
+
+    private static string Format(object? value) => value switch
+    {
+        null => "",
+        JsonElement je => je.ToString(),
+        DateTimeOffset d => d.ToString("dd.MM.yyyy HH:mm"),
+        DateTime d => d.ToString("dd.MM.yyyy HH:mm"),
+        decimal m => m.ToString("N4", CultureInfo.CurrentCulture),
+        double d => d.ToString("N4", CultureInfo.CurrentCulture),
+        _ => value.ToString() ?? ""
+    };
+}

@@ -1,0 +1,79 @@
+@page "/osos/weather"
+@inject OsosApiClient Api
+@inject IJSRuntime JS
+
+<PageHeader Module="osos" Title="Hava Durumu"
+            Subtitle="Open-Meteo saatlik ~35 değişken. Kaynak (Archive/Historical/Forecast) tarihe göre otomatik seçilir; sonuç Geçmiş'e kaydedilir." />
+
+<section class="card">
+    <div class="form-grid">
+        <label class="field"><span>Enlem</span><input type="number" step="any" @bind="_lat" /></label>
+        <label class="field"><span>Boylam</span><input type="number" step="any" @bind="_lon" /></label>
+        <label class="field"><span>Başlangıç</span><input type="date" @bind="_start" /></label>
+        <label class="field"><span>Bitiş</span><input type="date" @bind="_end" /></label>
+        <label class="field"><span>Saat dilimi</span><input @bind="_tz" /></label>
+        <label class="field"><span>Panel tilt (ops.)</span><input type="number" step="any" @bind="_tilt" placeholder="0–90°" /></label>
+        <label class="field"><span>Azimuth (ops.)</span><input type="number" step="any" @bind="_azimuth" placeholder="-180–180°" /></label>
+        <div class="field field-action">
+            <button class="btn btn-primary" disabled="@_busy" @onclick="Run">
+                @if (_busy) { <Spinner Small /> <span>İndiriliyor…</span> }
+                else { <Icon Name="cloud-sun" Size="16" /> <span>Verileri getir</span> }
+            </button>
+        </div>
+    </div>
+    <Alert Kind="error" Text="@_msg" />
+</section>
+
+@if (_result is not null)
+{
+    <section class="card">
+        <div class="toolbar">
+            <div class="segmented segmented-sm">
+                <button class="@(_view == "table" ? "is-active" : "")" @onclick='() => _view = "table"'><Icon Name="table" Size="15" /> Tablo</button>
+                <button class="@(_view == "chart" ? "is-active" : "")" @onclick='() => _view = "chart"'><Icon Name="chart" Size="15" /> Grafik</button>
+            </div>
+            <span class="muted">#@_result.SearchHistoryId · @_result.RowCount saat</span>
+            <span class="toolbar-spacer"></span>
+            <button class="btn btn-sm" @onclick="() => Download(_result!.SearchHistoryId)"><Icon Name="download" Size="15" /> CSV</button>
+        </div>
+        @if (_view == "table") { <ResultTable Json="@_result.RawJson" /> }
+        else { <ResultChart Json="@_result.RawJson" /> }
+    </section>
+}
+
+@code {
+    private double _lat = 40.195, _lon = 29.060;
+    private DateTime _start = DateTime.Today.AddDays(-7);
+    private DateTime _end = DateTime.Today;
+    private string _tz = "Europe/Istanbul";
+    private double? _tilt, _azimuth;
+    private bool _busy;
+    private string? _msg;
+    private OsosResult? _result;
+    private string _view = "table";
+
+    private async Task Run()
+    {
+        _busy = true; _msg = null; _result = null; _view = "table";
+        try
+        {
+            _result = await Api.WeatherAsync(new WeatherQuery
+            {
+                Latitude = _lat, Longitude = _lon, StartDate = _start, EndDate = _end,
+                Timezone = _tz, Tilt = _tilt, Azimuth = _azimuth
+            });
+        }
+        catch (ApiException ex) { _msg = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task Download(long id)
+    {
+        try
+        {
+            var f = await Api.ExportCsvAsync(id);
+            await JS.InvokeVoidAsync("fyblue.download", f.FileName, Convert.ToBase64String(f.Bytes), "text/csv");
+        }
+        catch (ApiException ex) { _msg = ex.Message; }
+    }
+}

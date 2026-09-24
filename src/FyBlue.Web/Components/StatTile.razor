@@ -1,0 +1,11 @@
+<div class="stat-tile">
+    <div class="stat-icon"><Icon Name="@Icon" Size="18" /></div>
+    <div class="stat-value">@Value</div>
+    <div class="stat-label">@Label</div>
+</div>
+
+@code {
+    [Parameter] public string Icon { get; set; } = "chart";
+    [Parameter, EditorRequired] public string Value { get; set; } = "";
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+}

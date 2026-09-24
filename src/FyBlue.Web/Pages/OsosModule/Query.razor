@@ -1,0 +1,170 @@
+@page "/osos/query"
+@inject OsosApiClient Api
+@inject IJSRuntime JS
+
+<PageHeader Module="osos" Title="Sorgu" Subtitle="Tüketim, endeks, profil ve abone verilerini sorgulayın. Her sorgu geçmişe kaydedilir." />
+
+<LinkGate System="ExternalSystem.Osos">
+    <section class="card">
+        <div class="segmented" role="tablist">
+            @foreach (var (key, label) in Screens)
+            {
+                <button role="tab" class="@(key == _screen ? "is-active" : "")" @onclick="() => _screen = key">@label</button>
+            }
+        </div>
+
+        <div class="form-grid">
+            @if (_screen == "Subscriptions")
+            {
+                <p class="muted span-all">Ek bilgi gerekmez — hesabınızdaki tesisatlar listelenir.</p>
+            }
+            else
+            {
+                @if (_screen == "Dashboard")
+                {
+                    @if (_subs.Count > 0)
+                    {
+                        <label class="field">
+                            <span>Tesisat</span>
+                            <select @bind="_ownerSerno">
+                                <option value="0">— seçin —</option>
+                                @foreach (var s in _subs) { <option value="@s.Serno">@s.Label (#@s.Serno)</option> }
+                            </select>
+                        </label>
+                    }
+                    else
+                    {
+                        <label class="field"><span>Owner Serno (tesisat)</span><input type="number" @bind="_ownerSerno" /></label>
+                    }
+                }
+                <label class="field"><span>Başlangıç</span><input type="date" @bind="_start" /></label>
+                <label class="field"><span>Bitiş</span><input type="date" @bind="_end" /></label>
+                @if (_screen == "Consumption")
+                {
+                    <label class="field"><span>Tip</span><input type="number" @bind="_type" /></label>
+                }
+            }
+            <div class="field field-action">
+                <button class="btn btn-primary" disabled="@_busy" @onclick="Run">
+                    @if (_busy) { <Spinner Small /> <span>Sorgulanıyor…</span> }
+                    else { <Icon Name="search" Size="16" /> <span>Sorgula</span> }
+                </button>
+            </div>
+        </div>
+
+        @if (_screen is "Consumption" or "Endex" or "Profiles" && _subs.Count > 0)
+        {
+            <details class="picker">
+                <summary>
+                    <Icon Name="filter" Size="15" />
+                    Tesisat filtresi <span class="badge">@(_selected.Count == 0 ? "tümü" : $"{_selected.Count} seçili")</span>
+                </summary>
+                <div class="picker-list">
+                    @foreach (var s in _subs)
+                    {
+                        <label class="check">
+                            <input type="checkbox" checked="@_selected.Contains(s.Serno)"
+                                   @onchange="e => Toggle(s.Serno, (bool)e.Value!)" />
+                            <span>@s.Label @if (s.Serno > 0) { <span class="muted">#@s.Serno</span> }</span>
+                        </label>
+                    }
+                </div>
+            </details>
+        }
+
+        <Alert Kind="error" Text="@_msg" />
+    </section>
+
+    @if (_result is not null)
+    {
+        <section class="card">
+            <div class="toolbar">
+                <div class="segmented segmented-sm">
+                    <button class="@(_view == "table" ? "is-active" : "")" @onclick='() => _view = "table"'><Icon Name="table" Size="15" /> Tablo</button>
+                    <button class="@(_view == "chart" ? "is-active" : "")" @onclick='() => _view = "chart"'><Icon Name="chart" Size="15" /> Grafik</button>
+                </div>
+                <span class="muted">#@_result.SearchHistoryId · @_result.RowCount satır</span>
+                <span class="toolbar-spacer"></span>
+                <button class="btn btn-sm" @onclick="() => Download(_result!.SearchHistoryId)"><Icon Name="download" Size="15" /> CSV</button>
+            </div>
+            @if (_view == "table")
+            {
+                <ResultTable Json="@_result.RawJson" />
+            }
+            else
+            {
+                <ResultChart Json="@_result.RawJson" />
+            }
+        </section>
+    }
+</LinkGate>
+
+@code {
+    private static readonly (string Key, string Label)[] Screens =
+    [
+        ("Consumption", "Tüketim"),
+        ("Endex", "Endeks"),
+        ("Profiles", "Akım/Gerilim/Cosφ"),
+        ("Subscriptions", "Aboneler"),
+        ("Dashboard", "Dashboard")
+    ];
+
+    private string _screen = "Consumption";
+    private long _ownerSerno;
+    private DateTime _start = DateTime.Today.AddDays(-7);
+    private DateTime _end = DateTime.Today;
+    private int _type = 2;
+    private bool _busy;
+    private string? _msg;
+    private OsosResult? _result;
+    private string _view = "table";
+
+    private List<SubscriptionItem> _subs = new();
+    private readonly HashSet<long> _selected = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var me = await Api.GetMeAsync();
+            if (me is not null) _subs = SubscriptionParser.Parse(me.Subscriptions);
+        }
+        catch (ApiException) { /* abone listesi opsiyonel; hesap bağlı değilse LinkGate zaten uyarır */ }
+    }
+
+    private void Toggle(long serno, bool on)
+    {
+        if (on) _selected.Add(serno); else _selected.Remove(serno);
+    }
+
+    private long[] Selected() => _selected.Count == 0 ? Array.Empty<long>() : _selected.ToArray();
+
+    private async Task Download(long id)
+    {
+        try
+        {
+            var f = await Api.ExportCsvAsync(id);
+            await JS.InvokeVoidAsync("fyblue.download", f.FileName, Convert.ToBase64String(f.Bytes), "text/csv");
+        }
+        catch (ApiException ex) { _msg = ex.Message; }
+    }
+
+    private async Task Run()
+    {
+        _busy = true; _msg = null; _result = null; _view = "table";
+        try
+        {
+            _result = _screen switch
+            {
+                "Consumption" => await Api.ConsumptionAsync(new ConsumptionQuery { StartDate = _start, EndDate = _end, Type = _type, Selected = Selected() }),
+                "Endex" => await Api.EndexAsync(new EndexQuery { StartDate = _start, EndDate = _end, Selected = Selected() }),
+                "Profiles" => await Api.ProfilesAsync(new ProfilesQuery { StartDate = _start, EndDate = _end, Selected = Selected() }),
+                "Subscriptions" => await Api.SubscriptionsAsync(new SubscriptionsQuery()),
+                "Dashboard" => await Api.OwnerConsumptionsAsync(new OwnerConsumptionsQuery { OwnerSerno = _ownerSerno, StartDate = _start, EndDate = _end }),
+                _ => null
+            };
+        }
+        catch (ApiException ex) { _msg = ex.Message; }
+        finally { _busy = false; }
+    }
+}

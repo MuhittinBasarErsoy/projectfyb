@@ -1,0 +1,293 @@
+@page "/epias/formulas"
+@inject EpiasApiClient Api
+
+<PageHeader Module="epias" Title="Formüller"
+            Subtitle="Farklı servislerin tablolarını tarih (ve saat) üzerinden hizalayıp aritmetik işlem yapar. Kolon başvurusu [tablo_adi.kolon_adi] biçimindedir." />
+
+<Alert Kind="error" Text="@_error" OnDismiss="() => _error = null" />
+
+<div class="grid-2 grid-align-start">
+    <section class="card">
+        <div class="toolbar">
+            <h2>@(_editing.Id > 0 ? "Formülü düzenle" : "Yeni formül")</h2>
+            <span class="toolbar-spacer"></span>
+            @if (_editing.Id > 0)
+            {
+                <button class="btn btn-sm btn-ghost" @onclick="NewFormula"><Icon Name="plus" Size="15" /> Yeni</button>
+            }
+        </div>
+
+        <div class="stack">
+            <label class="field"><span>Ad</span><input type="text" @bind="_editing.Name" placeholder="Örn: PTF x Tüketim / 5" /></label>
+            <label class="field"><span>Açıklama</span><input type="text" @bind="_editing.Description" /></label>
+            <label class="field">
+                <span>İfade</span>
+                <textarea class="code-input" rows="4" @bind="_editing.Expression" @bind:event="oninput"
+                          placeholder="[markets_dam_data_mcp.price] * [consumption_data_realtime_consumption.consumption] / 5"></textarea>
+            </label>
+
+            <div class="form-grid">
+                <label class="field">
+                    <span>Hizalama</span>
+                    <select @bind="_editing.AlignmentMode">
+                        <option value="DateHour">Gün + saat</option>
+                        <option value="Date">Gün</option>
+                        <option value="None">Yok (tek toplam)</option>
+                    </select>
+                </label>
+                <label class="field"><span>Çıktı tablosu</span><input type="text" @bind="_editing.OutputTable" placeholder="ptf_tuketim_carpim" /></label>
+            </div>
+
+            <div class="form-grid">
+                <label class="field"><span>Aralık başlangıç</span><input type="date" @bind="_from" /></label>
+                <label class="field"><span>Aralık bitiş</span><input type="date" @bind="_to" /></label>
+            </div>
+
+            <div class="btn-row">
+                <button class="btn" @onclick="ValidateAsync" disabled="@_busy"><Icon Name="check" Size="16" /> Doğrula</button>
+                <button class="btn" @onclick="PreviewAsync" disabled="@_busy"><Icon Name="eye" Size="16" /> Önizle</button>
+                <button class="btn btn-primary" @onclick="SaveAsync" disabled="@_busy"><Icon Name="check-circle" Size="16" /> Kaydet</button>
+            </div>
+        </div>
+
+        @if (_validation is not null)
+        {
+            <Alert Kind="@(_validation.IsValid ? "ok" : "error")">
+                @if (_validation.IsValid)
+                {
+                    <text>Geçerli. Kullanılan tablolar: @string.Join(", ", _validation.ReferencedTables)</text>
+                }
+                else
+                {
+                    @_validation.Error
+                }
+            </Alert>
+
+            @if (_validation is { IsValid: true, GeneratedSql: not null })
+            {
+                <details class="disclosure">
+                    <summary>Üretilen SQL</summary>
+                    <pre class="code-block">@_validation.GeneratedSql</pre>
+                </details>
+            }
+        }
+
+        @if (_preview is not null)
+        {
+            @if (_preview.Error is not null)
+            {
+                <Alert Kind="error" Text="@_preview.Error" />
+            }
+            else
+            {
+                <p class="muted">@_preview.Rows.Count satır · @_preview.ElapsedMs ms</p>
+                <div class="table-wrap table-wrap-short">
+                    <table class="table table-compact">
+                        <thead><tr><th>Tarih</th><th>Saat</th><th class="num">Değer</th></tr></thead>
+                        <tbody>
+                            @foreach (var row in _preview.Rows.Take(200))
+                            {
+                                <tr>
+                                    <td>@(row.Date?.ToString("dd.MM.yyyy") ?? "—")</td>
+                                    <td>@(row.Hour ?? "—")</td>
+                                    <td class="num">@(row.Value?.ToString("N4", CultureInfo.CurrentCulture) ?? "—")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+    </section>
+
+    <section class="card card-flush">
+        <div class="card-pad"><h2>Kayıtlı formüller</h2></div>
+
+        @if (_formulas is null)
+        {
+            <div class="card-pad"><SkeletonRows Rows="3" /></div>
+        }
+        else if (_formulas.Count == 0)
+        {
+            <EmptyState Icon="function" Title="Henüz formül yok" Text="Soldaki formu kullanarak ilk formülünüzü oluşturun." />
+        }
+        else
+        {
+            <ul class="formula-list">
+                @foreach (var f in _formulas)
+                {
+                    <li class="@(f.Id == _editing.Id ? "is-selected" : "")">
+                        <div class="formula-head">
+                            <strong>@f.Name</strong>
+                            <span class="badge">@AlignmentLabel(f.AlignmentMode)</span>
+                            @if (!string.IsNullOrWhiteSpace(f.OutputTable))
+                            {
+                                <span class="badge badge-info"><code>formula.@f.OutputTable</code></span>
+                            }
+                        </div>
+                        <code class="formula-expr">@f.Expression</code>
+                        <div class="btn-row">
+                            <button class="btn btn-sm" @onclick="() => Edit(f)"><Icon Name="edit" Size="14" /> Düzenle</button>
+                            <button class="btn btn-sm btn-primary" @onclick="() => RunAsync(f)"
+                                    disabled="@(_busy || string.IsNullOrWhiteSpace(f.OutputTable))"
+                                    title="@(string.IsNullOrWhiteSpace(f.OutputTable) ? "Kaydetmek için çıktı tablosu gerekli" : "Seçili aralık için çalıştır ve kaydet")">
+                                <Icon Name="play" Size="14" /> Çalıştır
+                            </button>
+                            <button class="btn btn-sm btn-danger-ghost" @onclick="() => DeleteAsync(f)"><Icon Name="trash" Size="14" /> Sil</button>
+                        </div>
+                    </li>
+                }
+            </ul>
+        }
+
+        @if (_runResult is not null)
+        {
+            <div class="card-pad">
+                <Alert Kind="@(_runResult.Error is null ? "ok" : "error")">
+                    @if (_runResult.Error is null)
+                    {
+                        <text><strong>@_runResult.Name</strong>: @_runResult.Rows.Count satır hesaplandı, @_runResult.Persisted satır tabloya yazıldı (@_runResult.ElapsedMs ms).</text>
+                    }
+                    else
+                    {
+                        @_runResult.Error
+                    }
+                </Alert>
+            </div>
+        }
+    </section>
+</div>
+
+@code {
+    private List<FormulaDto>? _formulas;
+    private FormulaDto _editing = NewDto();
+    private FormulaValidationResult? _validation;
+    private FormulaRunResult? _preview;
+    private FormulaRunResult? _runResult;
+    private string? _error;
+    private bool _busy;
+
+    private DateTime? _from = DateTime.Today.AddDays(-7);
+    private DateTime? _to = DateTime.Today;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private static FormulaDto NewDto() => new() { AlignmentMode = "DateHour", IsActive = true };
+
+    private static string AlignmentLabel(string mode) => mode switch
+    {
+        "DateHour" => "Gün + saat",
+        "Date" => "Gün",
+        "None" => "Tek toplam",
+        _ => mode
+    };
+
+    private void NewFormula()
+    {
+        _editing = NewDto();
+        _validation = null;
+        _preview = null;
+    }
+
+    private void Edit(FormulaDto f)
+    {
+        _editing = new FormulaDto
+        {
+            Id = f.Id,
+            Name = f.Name,
+            Description = f.Description,
+            Expression = f.Expression,
+            AlignmentMode = f.AlignmentMode,
+            OutputTable = f.OutputTable,
+            DefaultFrom = f.DefaultFrom,
+            DefaultTo = f.DefaultTo,
+            IsActive = f.IsActive
+        };
+        _validation = null;
+        _preview = null;
+    }
+
+    private async Task LoadAsync()
+    {
+        try { _formulas = await Api.GetFormulasAsync(); }
+        catch (ApiException ex) { _error = ex.Message; _formulas ??= new(); }
+    }
+
+    private async Task ValidateAsync()
+    {
+        _busy = true;
+        _preview = null;
+        try
+        {
+            _validation = await Api.ValidateFormulaAsync(new FormulaPreviewRequest
+            {
+                Expression = _editing.Expression,
+                AlignmentMode = _editing.AlignmentMode
+            });
+        }
+        catch (ApiException ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task PreviewAsync()
+    {
+        _busy = true;
+        try
+        {
+            _preview = await Api.PreviewFormulaAsync(new FormulaPreviewRequest
+            {
+                Expression = _editing.Expression,
+                AlignmentMode = _editing.AlignmentMode,
+                From = EpiasApiClient.ToOffset(_from),
+                To = EpiasApiClient.ToOffset(_to, endOfDay: true),
+                MaxRows = 200
+            });
+        }
+        catch (ApiException ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Api.SaveFormulaAsync(_editing);
+            NewFormula();
+            await LoadAsync();
+        }
+        catch (ApiException ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task RunAsync(FormulaDto f)
+    {
+        _busy = true;
+        _runResult = null;
+        try
+        {
+            _runResult = await Api.RunFormulaAsync(new FormulaRunRequest
+            {
+                FormulaId = f.Id,
+                From = EpiasApiClient.ToOffset(_from),
+                To = EpiasApiClient.ToOffset(_to, endOfDay: true),
+                Persist = true,
+                MaxRows = 20000
+            });
+        }
+        catch (ApiException ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task DeleteAsync(FormulaDto f)
+    {
+        try
+        {
+            await Api.DeleteFormulaAsync(f.Id);
+            if (_editing.Id == f.Id) NewFormula();
+            await LoadAsync();
+        }
+        catch (ApiException ex) { _error = ex.Message; }
+    }
+}

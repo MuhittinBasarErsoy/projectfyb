@@ -1,0 +1,47 @@
+# Yerel geliştirme / tek sunucu kurulumu: MSSQL + FyBlue (API + web aynı süreçte).
+#   docker compose up -d --build      → http://localhost:8080
+#   docker compose up -d mssql        → yalnızca veritabanı (Visual Studio / dotnet run için)
+services:
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: fyblue-mssql
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD:-FyBlue_Dev_Passw0rd!}"
+      MSSQL_PID: "${MSSQL_PID:-Developer}"
+    ports:
+      - "127.0.0.1:1433:1433"
+    volumes:
+      - mssql-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -C -Q \"SELECT 1\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fyblue-app
+    environment:
+      ConnectionStrings__Default: "Server=mssql,1433;Database=FyBlue;User Id=sa;Password=${MSSQL_SA_PASSWORD:-FyBlue_Dev_Passw0rd!};TrustServerCertificate=True;Connect Timeout=60"
+      Jwt__Key: "${JWT_KEY:-DEV_ONLY_docker_fyblue_jwt_signing_key_change_me_0123456789}"
+      Hangfire__User: "${HANGFIRE_USER:-admin}"
+      Hangfire__Password: "${HANGFIRE_PASSWORD:-}"
+      ExposeApiDocs: "${EXPOSE_API_DOCS:-false}"
+    ports:
+      - "8080:8080"
+    volumes:
+      # Data Protection anahtarları: silinirse saklanan OSOS/EPİAŞ şifreleri çözülemez.
+      - fyblue-keys:/var/lib/fyblue/keys
+    depends_on:
+      mssql:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  mssql-data:
+  fyblue-keys:

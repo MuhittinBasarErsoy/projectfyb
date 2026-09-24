@@ -1,0 +1,230 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using FyBlue.Contracts;
+using Osos.Contracts;
+using Osos.Core.Osos;
+using FyBlue.Server.Data;
+using FyBlue.Server.Services;
+
+namespace FyBlue.Server.Controllers;
+
+[ApiController]
+[Authorize]
+[Route("api/osos")]
+public sealed class OsosController : ControllerBase
+{
+    private readonly AppDbContext _db;
+    private readonly OsosSessionService _osos;
+    private readonly SearchService _search;
+    private readonly ILogger<OsosController> _logger;
+
+    public OsosController(AppDbContext db, OsosSessionService osos, SearchService search, ILogger<OsosController> logger)
+    {
+        _db = db;
+        _osos = osos;
+        _search = search;
+        _logger = logger;
+    }
+
+    private string Uid => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+    private static long D(DateTime dt) => SearchService.ToOsosDate(dt);
+
+    /// <summary>OSOS hesabını bağlar/günceller (giriş doğrulaması yapar).</summary>
+    [HttpPost("link")]
+    public async Task<ActionResult<OsosLinkResponse>> Link(OsosLinkRequest req, CancellationToken ct)
+    {
+        try
+        {
+            // Eski/başka DB'den kalan token: kullanıcı bu veritabanında yoksa FK hatası yerine net mesaj.
+            if (!await _db.Users.AnyAsync(u => u.Id == Uid, ct))
+                return Unauthorized(new OsosLinkResponse(false,
+                    "Oturumunuz geçersiz (eski hesap farklı veritabanından). Lütfen Çıkış yapıp yeniden Kayıt/Giriş olun."));
+
+            var (ok, msg, serno) = await _osos.TryLoginAsync(req.OsosUserCode, req.OsosPassword, req.RememberMe, ct);
+            if (!ok) return BadRequest(new OsosLinkResponse(false, msg));
+
+            var cred = await _db.OsosCredentials.FirstOrDefaultAsync(c => c.AppUserId == Uid, ct);
+            if (cred is null)
+            {
+                cred = new OsosCredential { AppUserId = Uid };
+                _db.OsosCredentials.Add(cred);
+            }
+            cred.OsosUserCode = req.OsosUserCode;
+            cred.OsosPasswordProtected = _osos.Protect(req.OsosPassword);
+            cred.RememberMe = req.RememberMe;
+            cred.CustomerSerno = serno;
+            cred.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync(ct);
+            _osos.Forget(Uid);
+
+            return new OsosLinkResponse(true, $"OSOS hesabı bağlandı (Serno: {serno}).");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "OSOS link hatası");
+            var msg = ex.Message;
+            for (var inner = ex.InnerException; inner is not null; inner = inner.InnerException)
+                msg += " → " + inner.Message;
+            return BadRequest(new OsosLinkResponse(false, $"{ex.GetType().Name}: {msg}"));
+        }
+    }
+
+    /// <summary>Bağlantı durumu (OSOS'a gitmeden, yalnızca DB'den).</summary>
+    [HttpGet("status")]
+    public async Task<ActionResult<ExternalAccountStatus>> Status(CancellationToken ct)
+    {
+        var cred = await _db.OsosCredentials.AsNoTracking().FirstOrDefaultAsync(c => c.AppUserId == Uid, ct);
+        return cred is null
+            ? new ExternalAccountStatus(false, null, null)
+            : new ExternalAccountStatus(true, cred.OsosUserCode, cred.UpdatedAt);
+    }
+
+    /// <summary>OSOS hesap bağlantısını kaldırır (saklanan şifre silinir).</summary>
+    [HttpDelete("link")]
+    public async Task<IActionResult> Unlink(CancellationToken ct)
+    {
+        var cred = await _db.OsosCredentials.FirstOrDefaultAsync(c => c.AppUserId == Uid, ct);
+        if (cred is not null)
+        {
+            _db.OsosCredentials.Remove(cred);
+            await _db.SaveChangesAsync(ct);
+        }
+        _osos.Forget(Uid);
+        return NoContent();
+    }
+
+    /// <summary>Giriş yapan müşterinin Serno'su + tesisat/abone listesi (zengin: ünvan/adres vb.).</summary>
+    [HttpGet("me")]
+    public async Task<ActionResult<object>> Me(CancellationToken ct)
+    {
+        try
+        {
+            long serno = await _osos.GetCustomerSernoAsync(Uid, ct);
+            // Zengin tesisat listesi login yanıtında değil, bu serviste gelir (ünvan/adres/tarife vb.).
+            string json = await _osos.CallAsync(Uid, OsosMethods.GetCustomerPortalSubscriptions,
+                new { Serno = serno, PageSize = 1000, PageNumber = 1 }, ct);
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            var arr = FindFirstObjectArray(doc.RootElement);
+            return Ok(new { serno, subscriptions = arr?.Clone() ?? default });
+        }
+        catch (InvalidOperationException ex) when (ex is not OsosNotLinkedException) { return BadRequest(new { message = ex.Message }); }
+    }
+
+    // Yanıttaki ilk obje dizisini bulur (esb sarmalayıcısının içinde olabilir).
+    private static System.Text.Json.JsonElement? FindFirstObjectArray(System.Text.Json.JsonElement el)
+    {
+        switch (el.ValueKind)
+        {
+            case System.Text.Json.JsonValueKind.Array:
+                foreach (var i in el.EnumerateArray())
+                    if (i.ValueKind == System.Text.Json.JsonValueKind.Object) return el;
+                return null;
+            case System.Text.Json.JsonValueKind.Object:
+                foreach (var p in el.EnumerateObject())
+                {
+                    var r = FindFirstObjectArray(p.Value);
+                    if (r is not null) return r;
+                }
+                return null;
+            default: return null;
+        }
+    }
+
+    /// <summary>Serno verilmemişse (<=0) müşteri Serno'sunu kullan.</summary>
+    private async Task<long> ResolveSernoAsync(long requested, CancellationToken ct)
+        => requested > 0 ? requested : await _osos.GetCustomerSernoAsync(Uid, ct);
+
+    [HttpPost("consumption")]
+    public async Task<ActionResult<OsosResult>> Consumption(ConsumptionQuery q, CancellationToken ct)
+    {
+        long serno = await ResolveSernoAsync(q.Serno, ct);
+        return await Run("Consumption", OsosMethods.GetCustomerSelectedConsumptions, new
+        {
+            Serno = serno,
+            StartDate = D(q.StartDate),
+            EndDate = D(q.EndDate),
+            Selected = q.Selected ?? Array.Empty<long>(),
+            Type = q.Type,
+            Period = q.Period,
+            MarkFilterString = (string?)null,
+            TitleFilterString = (string?)null,
+            TotalItemCount = q.TotalItemCount
+        }, serno, q.StartDate, q.EndDate, ct);
+    }
+
+    [HttpPost("endex")]
+    public async Task<ActionResult<OsosResult>> Endex(EndexQuery q, CancellationToken ct)
+    {
+        long serno = await ResolveSernoAsync(q.Serno, ct);
+        return await Run("Endex", OsosMethods.GetCustomerSelectedCurrentEndexes, new
+        {
+            Serno = serno,
+            StartDate = D(q.StartDate),
+            EndDate = D(q.EndDate),
+            Selected = q.Selected ?? Array.Empty<long>(),
+            MarkFilterString = (string?)null,
+            TitleFilterString = (string?)null,
+            TotalItemCount = q.TotalItemCount
+        }, serno, q.StartDate, q.EndDate, ct);
+    }
+
+    [HttpPost("profiles")]
+    public async Task<ActionResult<OsosResult>> Profiles(ProfilesQuery q, CancellationToken ct)
+    {
+        long serno = await ResolveSernoAsync(q.Serno, ct);
+        return await Run("Profiles", OsosMethods.GetCustomerSelectedProfiles, new
+        {
+            Serno = serno,
+            StartDate = D(q.StartDate),
+            EndDate = D(q.EndDate),
+            Selected = q.Selected ?? Array.Empty<long>(),
+            MarkFilterString = (string?)null,
+            TitleFilterString = (string?)null,
+            TotalItemCount = q.TotalItemCount,
+            WithourMultiplier = q.WithoutMultiplier   // OSOS'taki alan adı (yazım hatası korunuyor)
+        }, serno, q.StartDate, q.EndDate, ct);
+    }
+
+    [HttpPost("subscriptions")]
+    public async Task<ActionResult<OsosResult>> Subscriptions(SubscriptionsQuery q, CancellationToken ct)
+    {
+        long serno = await ResolveSernoAsync(q.Serno, ct);
+        return await Run("Subscriptions", OsosMethods.GetCustomerPortalSubscriptions, new
+        {
+            Serno = serno,
+            PageSize = q.PageSize,
+            PageNumber = q.PageNumber
+        }, serno, null, null, ct);
+    }
+
+    [HttpPost("dashboard/owner-consumptions")]
+    public Task<ActionResult<OsosResult>> OwnerConsumptions(OwnerConsumptionsQuery q, CancellationToken ct) =>
+        Run("Dashboard", OsosMethods.GetOwnerConsumptions, new
+        {
+            OwnerSerno = q.OwnerSerno,
+            OwnerType = q.OwnerType,
+            StartDate = D(q.StartDate),
+            EndDate = D(q.EndDate),
+            IsOnlySuccess = q.IsOnlySuccess,
+            IncludeLoadProfiles = q.IncludeLoadProfiles,
+            IncludeVersions = false,
+            WithoutMultiplier = q.WithoutMultiplier,
+            MergeResult = q.MergeResult
+        }, q.OwnerSerno, q.StartDate, q.EndDate, ct);
+
+    private async Task<ActionResult<OsosResult>> Run(string screen, string method, object parameters,
+        long? serno, DateTime? start, DateTime? end, CancellationToken ct)
+    {
+        try
+        {
+            var result = await _search.RunAndSaveAsync(Uid, screen, method, parameters, serno, start, end, ct);
+            return result;
+        }
+        catch (InvalidOperationException ex) when (ex is not OsosNotLinkedException)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+}

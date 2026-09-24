@@ -1,0 +1,136 @@
+@page "/epias"
+@inject EpiasApiClient Api
+
+<PageHeader Module="epias" Title="Özet" Subtitle="Şeffaflık Platformu kataloğu ve toplu senkronizasyon. Aynı kayıtlar tekrar yazılmaz." />
+
+<Alert Kind="error" Text="@_error" OnDismiss="() => _error = null" />
+
+<div class="stat-grid">
+    @if (_loading)
+    {
+        @for (var i = 0; i < 4; i++) { <div class="stat-tile"><SkeletonRows Rows="2" /></div> }
+    }
+    else
+    {
+        <StatTile Icon="layers" Value="@_totalOperations.ToString("N0")" Label="Katalogdaki operasyon" />
+        <StatTile Icon="database" Value="@_dataEndpoints.ToString("N0")" Label="Tabloya yazılabilir servis" />
+        <StatTile Icon="check-circle" Value="@_syncedEndpoints.ToString("N0")" Label="En az bir kez çekilmiş" />
+        <StatTile Icon="download" Value="@_exportEndpoints.ToString("N0")" Label="Export (dosya) servisi" />
+    }
+</div>
+
+<LinkGate System="ExternalSystem.Epias">
+    <section class="card">
+        <h2>Toplu senkronizasyon</h2>
+        <p class="muted">Ek parametre istemeyen tüm veri servislerini seçilen tarih aralığı için paralel çeker.</p>
+
+        <div class="form-grid">
+            <label class="field"><span>Başlangıç</span><input type="date" @bind="_from" /></label>
+            <label class="field"><span>Bitiş</span><input type="date" @bind="_to" /></label>
+            <label class="field"><span>Parça (gün)</span><input type="number" min="0" max="365" @bind="_chunkDays" /></label>
+            <label class="field"><span>Paralellik</span><input type="number" min="1" max="8" @bind="_maxParallel" /></label>
+            <div class="field field-action">
+                <button class="btn btn-primary" @onclick="RunBulkAsync" disabled="@_syncing">
+                    @if (_syncing) { <Spinner Small /> <span>Çekiliyor…</span> }
+                    else { <Icon Name="refresh" Size="16" /> <span>Tümünü senkronize et</span> }
+                </button>
+            </div>
+        </div>
+
+        @if (_syncing)
+        {
+            <div class="progress-indeterminate" aria-hidden="true"></div>
+            <p class="muted">Bu işlem servis sayısına ve tarih aralığına göre birkaç dakika sürebilir.</p>
+        }
+
+        @if (_results is not null)
+        {
+            <div class="mini-stats">
+                <div><strong class="text-ok">@_results.Count(r => r.Success)</strong><span>başarılı</span></div>
+                <div><strong class="text-error">@_results.Count(r => !r.Success)</strong><span>hatalı</span></div>
+                <div><strong>@_results.Sum(r => r.Inserted).ToString("N0")</strong><span>yeni satır</span></div>
+                <div><strong>@_results.Sum(r => r.Duplicates).ToString("N0")</strong><span>kopya atlandı</span></div>
+            </div>
+
+            <div class="table-wrap table-wrap-tall">
+                <table class="table">
+                    <thead>
+                        <tr><th>Servis</th><th class="num">Çekilen</th><th class="num">Eklenen</th><th class="num">Kopya</th><th class="num">Süre</th><th>Durum</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in _results.OrderByDescending(x => x.Inserted))
+                        {
+                            <tr>
+                                <td><a href="epias/endpoints/@Uri.EscapeDataString(r.EndpointKey)"><code>@r.EndpointKey</code></a></td>
+                                <td class="num">@r.Fetched.ToString("N0")</td>
+                                <td class="num">@r.Inserted.ToString("N0")</td>
+                                <td class="num">@r.Duplicates.ToString("N0")</td>
+                                <td class="num">@r.ElapsedMs ms</td>
+                                <td>
+                                    @if (r.Success) { <span class="badge badge-ok">Tamam</span> }
+                                    else { <span class="badge badge-error" title="@r.Error">Hata</span> <span class="cell-sub">@r.Error</span> }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+</LinkGate>
+
+@code {
+    private bool _loading = true;
+    private bool _syncing;
+    private string? _error;
+
+    private int _totalOperations, _dataEndpoints, _syncedEndpoints, _exportEndpoints;
+
+    private DateTime? _from = DateTime.Today.AddDays(-7);
+    private DateTime? _to = DateTime.Today;
+    private int _chunkDays;
+    private int _maxParallel = 4;
+
+    private List<SyncResultDto>? _results;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            if (await Api.GetSyncStatusAsync() is { } s)
+            {
+                _totalOperations = GetInt(s, "totalOperations");
+                _dataEndpoints = GetInt(s, "dataEndpoints");
+                _syncedEndpoints = GetInt(s, "syncedEndpoints");
+                _exportEndpoints = GetInt(s, "exportEndpoints");
+            }
+        }
+        catch (ApiException ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private static int GetInt(JsonElement el, string name) =>
+        el.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetInt32() : 0;
+
+    private async Task RunBulkAsync()
+    {
+        _syncing = true;
+        _error = null;
+        _results = null;
+        try
+        {
+            _results = await Api.SyncBulkAsync(new BulkSyncRequest
+            {
+                StartDate = EpiasApiClient.ToOffset(_from),
+                EndDate = EpiasApiClient.ToOffset(_to, endOfDay: true),
+                ChunkDays = _chunkDays,
+                MaxParallel = _maxParallel
+            });
+            await LoadAsync();
+        }
+        catch (ApiException ex) { _error = ex.Message; }
+        finally { _syncing = false; }
+    }
+}

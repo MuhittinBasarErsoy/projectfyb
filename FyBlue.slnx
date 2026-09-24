@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/FyBlue.Server/FyBlue.Server.csproj" />
+    <Project Path="src/FyBlue.Web/FyBlue.Web.csproj" />
+    <Project Path="src/FyBlue.Contracts/FyBlue.Contracts.csproj" />
+    <Project Path="src/Osos.Core/Osos.Core.csproj" />
+    <Project Path="src/Osos.Contracts/Osos.Contracts.csproj" />
+    <Project Path="src/Epias.Core/Epias.Core.csproj" />
+    <Project Path="src/Epias.Contracts/Epias.Contracts.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Osos.Core.Tests/Osos.Core.Tests.csproj" />
+    <Project Path="tests/Epias.Core.Tests/Epias.Core.Tests.csproj" />
+  </Folder>
+</Solution>

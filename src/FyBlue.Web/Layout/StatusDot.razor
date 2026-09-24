@@ -1,0 +1,9 @@
+@if (Linked is not null)
+{
+    <span class="status-dot @(Linked == true ? "is-on" : "is-off")"
+          title="@(Linked == true ? "Hesap bağlı" : "Hesap bağlı değil")"></span>
+}
+
+@code {
+    [Parameter] public bool? Linked { get; set; }
+}

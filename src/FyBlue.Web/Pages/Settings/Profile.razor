@@ -1,0 +1,53 @@
+@page "/settings/profile"
+@inject AuthApi AuthApi
+@inject AuthState Auth
+
+<PageHeader Title="Profil" Subtitle="FyBlue hesabınız. OSOS ve EPİAŞ bağlantıları bu hesaba aittir." />
+
+<Alert Kind="error" Text="@_error" />
+
+<div class="grid-2">
+    <section class="card">
+        <div class="profile-head">
+            <span class="avatar avatar-lg">@Initial</span>
+            <div>
+                <h2>@(_profile?.Username ?? Auth.Username)</h2>
+                <span class="muted">@(_profile?.Email ?? "E-posta yok")</span>
+            </div>
+        </div>
+        @if (_profile is null && _error is null)
+        {
+            <SkeletonRows Rows="2" />
+        }
+        else if (_profile is not null)
+        {
+            <dl class="kv">
+                <dt>Kullanıcı adı</dt><dd>@_profile.Username</dd>
+                <dt>E-posta</dt><dd>@(_profile.Email ?? "—")</dd>
+                <dt>Üyelik</dt><dd>@_profile.CreatedAt.ToLocalTime().ToString("dd MMMM yyyy")</dd>
+            </dl>
+        }
+    </section>
+
+    <section class="card">
+        <h2>Oturum</h2>
+        <p class="muted">Çıkış yaptığınızda bu tarayıcıdaki oturum kapanır. Bağlı OSOS/EPİAŞ hesaplarınız ve zamanlanmış işleriniz etkilenmez.</p>
+        <div class="btn-row">
+            <a class="btn" href="settings/connections"><Icon Name="link" Size="16" /> Bağlı hesaplar</a>
+            <button class="btn btn-danger-ghost" @onclick="Auth.SignOutAsync"><Icon Name="logout" Size="16" /> Çıkış yap</button>
+        </div>
+    </section>
+</div>
+
+@code {
+    private ProfileResponse? _profile;
+    private string? _error;
+
+    private string Initial => string.IsNullOrEmpty(Auth.Username) ? "?" : Auth.Username[..1].ToUpperInvariant();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { _profile = await AuthApi.GetProfileAsync(); }
+        catch (ApiException ex) { _error = ex.Message; }
+    }
+}

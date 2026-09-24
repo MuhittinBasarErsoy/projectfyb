@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
+    <!-- Hosted publish + UseStaticFiles ile fingerprint'li friendly adlar 404/500 veriyor.
+         Fingerprint'i kapatınca fiziksel adlar = düz adlar → klasik statik serve çalışır. -->
+    <WasmFingerprintAssets>false</WasmFingerprintAssets>
+    <!-- Tarih/sayı biçimleri tr-TR olarak gösterilsin. -->
+    <BlazorWebAssemblyLoadAllGlobalizationData>true</BlazorWebAssemblyLoadAllGlobalizationData>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.12" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.12" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FyBlue.Contracts\FyBlue.Contracts.csproj" />
+    <ProjectReference Include="..\Osos.Contracts\Osos.Contracts.csproj" />
+    <ProjectReference Include="..\Epias.Contracts\Epias.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,76 @@
+@page "/login"
+@layout AuthLayout
+@inject AuthApi AuthApi
+@inject AuthState Auth
+@inject NavigationManager Nav
+
+<PageTitle>Giriş · FyBlue</PageTitle>
+
+<form class="auth-card" @onsubmit="SubmitAsync" @onsubmit:preventDefault>
+    <div class="auth-card-head">
+        <h1>Tekrar hoş geldiniz</h1>
+        <p>FyBlue hesabınızla giriş yapın.</p>
+    </div>
+
+    <label class="field">
+        <span>Kullanıcı adı</span>
+        <input @bind="_username" @bind:event="oninput" autocomplete="username" required autofocus />
+    </label>
+
+    <label class="field">
+        <span>Şifre</span>
+        <input type="password" @bind="_password" @bind:event="oninput" autocomplete="current-password" required />
+    </label>
+
+    <Alert Kind="error" Text="@_error" />
+
+    <button type="submit" class="btn btn-primary btn-block btn-lg" disabled="@_busy">
+        @if (_busy) { <Spinner Small /> }
+        Giriş yap
+    </button>
+
+    <p class="auth-switch">Hesabınız yok mu? <a href="@RegisterHref">Kayıt olun</a></p>
+</form>
+
+@code {
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+
+    private string _username = "", _password = "";
+    private bool _busy;
+    private string? _error;
+
+    private string RegisterHref => string.IsNullOrEmpty(ReturnUrl) ? "register" : $"register?returnUrl={Uri.EscapeDataString(ReturnUrl)}";
+
+    protected override void OnInitialized()
+    {
+        if (Auth.IsAuthenticated) Nav.NavigateTo(SafeReturn(ReturnUrl), replace: true);
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (_busy) return;
+        _error = null;
+        if (string.IsNullOrWhiteSpace(_username) || string.IsNullOrWhiteSpace(_password))
+        {
+            _error = "Kullanıcı adı ve şifre zorunludur.";
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await AuthApi.LoginAsync(_username.Trim(), _password);
+            Nav.NavigateTo(SafeReturn(ReturnUrl), replace: true);
+        }
+        catch (ApiException ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    /// <summary>Yalnızca uygulama içi göreli adreslere dönülür (açık yönlendirme engeli).</summary>
+    internal static string SafeReturn(string? returnUrl) =>
+        string.IsNullOrWhiteSpace(returnUrl) || returnUrl.Contains("//") || returnUrl.Contains(':')
+        || returnUrl.StartsWith("login", StringComparison.OrdinalIgnoreCase)
+        || returnUrl.StartsWith("register", StringComparison.OrdinalIgnoreCase)
+            ? ""
+            : returnUrl.TrimStart('/');
+}

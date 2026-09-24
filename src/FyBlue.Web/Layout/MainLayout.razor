@@ -1,0 +1,158 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject AuthState Auth
+@inject ConnectionsState Connections
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+@if (Auth.IsAuthenticated)
+{
+    <div class="shell @(_collapsed ? "is-collapsed" : "") @(_drawerOpen ? "drawer-open" : "")">
+        <aside class="sidebar" aria-label="Ana menü">
+            <div class="sidebar-brand">
+                <a href="" class="brand" @onclick="CloseDrawer">
+                    <span class="brand-mark"><Icon Name="zap" Size="18" Stroke="2.2" /></span>
+                    <span class="brand-name">FyBlue</span>
+                </a>
+                <button class="icon-btn sidebar-close" @onclick="CloseDrawer" aria-label="Menüyü kapat"><Icon Name="x" /></button>
+            </div>
+
+            <nav class="sidebar-nav" @onclick="CloseDrawer">
+                <NavLink class="nav-item" href="" Match="NavLinkMatch.All" title="Genel Bakış">
+                    <Icon Name="home" /><span>Genel Bakış</span>
+                </NavLink>
+
+                <div class="nav-group">
+                    <span class="nav-group-title">
+                        <span class="dot dot-osos"></span><span class="nav-group-label">OSOS</span>
+                        <StatusDot Linked="@Connections.Osos?.Linked" />
+                    </span>
+                    <NavLink class="nav-item" href="osos/query" title="Sorgu"><Icon Name="search" /><span>Sorgu</span></NavLink>
+                    <NavLink class="nav-item" href="osos/history" title="Geçmiş"><Icon Name="history" /><span>Geçmiş</span></NavLink>
+                    <NavLink class="nav-item" href="osos/jobs" title="Zamanlanmış İşler"><Icon Name="clock" /><span>Zamanlanmış İşler</span></NavLink>
+                    <NavLink class="nav-item" href="osos/weather" title="Hava Durumu"><Icon Name="cloud-sun" /><span>Hava Durumu</span></NavLink>
+                </div>
+
+                <div class="nav-group">
+                    <span class="nav-group-title">
+                        <span class="dot dot-epias"></span><span class="nav-group-label">EPİAŞ</span>
+                        <StatusDot Linked="@Connections.Epias?.Linked" />
+                    </span>
+                    <NavLink class="nav-item" href="epias" Match="NavLinkMatch.All" title="Özet"><Icon Name="gauge" /><span>Özet</span></NavLink>
+                    <NavLink class="nav-item" href="epias/endpoints" title="Servisler"><Icon Name="layers" /><span>Servisler</span></NavLink>
+                    <NavLink class="nav-item" href="epias/formulas" title="Formüller"><Icon Name="function" /><span>Formüller</span></NavLink>
+                </div>
+
+                <div class="nav-group">
+                    <span class="nav-group-title"><span class="nav-group-label">Ayarlar</span></span>
+                    <NavLink class="nav-item" href="settings/connections" title="Bağlı Hesaplar"><Icon Name="link" /><span>Bağlı Hesaplar</span></NavLink>
+                    <NavLink class="nav-item" href="settings/profile" title="Profil"><Icon Name="user" /><span>Profil</span></NavLink>
+                </div>
+            </nav>
+
+            <button class="sidebar-collapse" @onclick="ToggleCollapsed" aria-label="Menüyü daralt/genişlet">
+                <Icon Name="@(_collapsed ? "chevron-right" : "chevron-left")" Size="16" />
+                <span>Daralt</span>
+            </button>
+        </aside>
+
+        <div class="scrim" @onclick="CloseDrawer"></div>
+
+        <div class="main">
+            <header class="topbar">
+                <button class="icon-btn menu-btn" @onclick="() => _drawerOpen = true" aria-label="Menüyü aç"><Icon Name="menu" /></button>
+                <span class="topbar-spacer"></span>
+                <button class="icon-btn" @onclick="ToggleTheme" aria-label="Tema değiştir" title="Açık/koyu tema">
+                    <Icon Name="@(_dark ? "sun" : "moon")" />
+                </button>
+                <a class="user-chip" href="settings/profile" title="Profil">
+                    <span class="avatar">@Initial</span>
+                    <span class="user-name">@Auth.Username</span>
+                </a>
+                <button class="icon-btn" @onclick="LogoutAsync" aria-label="Çıkış yap" title="Çıkış yap"><Icon Name="logout" /></button>
+            </header>
+
+            <main class="content">
+                @Body
+            </main>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _collapsed;
+    private bool _drawerOpen;
+    private bool _dark;
+
+    private string Initial => string.IsNullOrEmpty(Auth.Username) ? "?" : Auth.Username[..1].ToUpperInvariant();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Auth.Changed += OnAuthChanged;
+        Connections.Changed += OnConnectionsChanged;
+
+        if (!Auth.IsAuthenticated)
+        {
+            GoToLogin();
+            return;
+        }
+
+        try { await Connections.EnsureLoadedAsync(); }
+        catch (ApiException) { /* durum rozetleri boş kalır; sayfalar kendi hatasını gösterir */ }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || !Auth.IsAuthenticated) return;
+        try
+        {
+            _dark = await JS.InvokeAsync<bool>("fyblue.isDark");
+            _collapsed = await JS.InvokeAsync<bool>("fyblue.getFlag", "sidebar.collapsed");
+            StateHasChanged();
+        }
+        catch (JSException) { }
+    }
+
+    private void GoToLogin()
+    {
+        var relative = Nav.ToBaseRelativePath(Nav.Uri);
+        var target = string.IsNullOrEmpty(relative) ? "login" : $"login?returnUrl={Uri.EscapeDataString(relative)}";
+        Nav.NavigateTo(target, replace: true);
+    }
+
+    private void OnAuthChanged()
+    {
+        if (Auth.IsAuthenticated) return;
+        Connections.Reset();
+        InvokeAsync(() =>
+        {
+            GoToLogin();
+            StateHasChanged();
+        });
+    }
+
+    private void OnConnectionsChanged() => InvokeAsync(StateHasChanged);
+
+    private void CloseDrawer() => _drawerOpen = false;
+
+    private async Task ToggleCollapsed()
+    {
+        _collapsed = !_collapsed;
+        try { await JS.InvokeVoidAsync("fyblue.setFlag", "sidebar.collapsed", _collapsed); }
+        catch (JSException) { }
+    }
+
+    private async Task ToggleTheme()
+    {
+        try { _dark = await JS.InvokeAsync<bool>("fyblue.toggleTheme"); }
+        catch (JSException) { }
+    }
+
+    private Task LogoutAsync() => Auth.SignOutAsync();
+
+    public void Dispose()
+    {
+        Auth.Changed -= OnAuthChanged;
+        Connections.Changed -= OnConnectionsChanged;
+    }
+}
