@@ -137,6 +137,9 @@ builder.Services.AddSingleton<BulkSyncService>();
 builder.Services.AddScoped<TicketContext>();
 builder.Services.AddScoped<IEpiasTicketAccessor, HttpTicketAccessor>();
 builder.Services.AddScoped<IngestionService>();
+// OSOS sorgu sonuçları (dbo.Rows_*) da formüllerde kaynak olarak kullanılabilir.
+builder.Services.AddSingleton<OsosFormulaSourceProvider>();
+builder.Services.AddSingleton<IFormulaSourceProvider>(sp => sp.GetRequiredService<OsosFormulaSourceProvider>());
 builder.Services.AddScoped<FormulaCompiler>();
 builder.Services.AddScoped<FormulaService>();
 

@@ -1,0 +1,487 @@
+@*
+    Sürükle-bırak formül oluşturucu. Kullanıcı tablo/kolon adı yazmaz:
+    soldaki listeden veri alanlarını, üstteki araç çubuğundan işlemleri
+    sürükler (ya da tıklar). Çıktı, sunucunun beklediği ifade metnidir.
+*@
+
+<div class="fb">
+    <aside class="fb-palette @(IsMoving ? "is-trash" : "")"
+           @ondragenter="() => _hover = -1"
+           @ondragover:preventDefault
+           @ondrop="DropOnPaletteAsync">
+        <div class="fb-palette-head">
+            <div class="search-input">
+                <Icon Name="search" Size="16" />
+                <input type="search" placeholder="Veri ara: PTF, tüketim, rüzgar…" @bind="_search" @bind:event="oninput" />
+            </div>
+            @if (_anyWithData)
+            {
+                <label class="check fb-only-data"><input type="checkbox" @bind="_onlyWithData" /> Yalnızca verisi çekilmiş olanlar</label>
+            }
+        </div>
+
+        <div class="fb-source-list">
+            @if (Sources is null)
+            {
+                <div class="fb-pad"><SkeletonRows Rows="6" /></div>
+            }
+            else
+            {
+                var visible = VisibleSources().ToList();
+                var searching = !string.IsNullOrWhiteSpace(_search);
+
+                @if (visible.Count == 0)
+                {
+                    <p class="muted fb-pad">@(searching ? "Aramanızla eşleşen veri alanı yok." : "Formülde kullanılabilecek veri tablosu yok. Önce Servisler sayfasından veri çekin.")</p>
+                }
+
+                string? lastTag = null;
+                foreach (var (s, fields) in visible.Take(searching ? 60 : int.MaxValue))
+                {
+                    if (s.Tag != lastTag)
+                    {
+                        lastTag = s.Tag;
+                        <div class="fb-tag">@s.Tag</div>
+                    }
+
+                    var open = searching || _expanded.Contains(s.TableName);
+                    <div class="fb-source @(open ? "is-open" : "")" @key="s.TableName">
+                        <button type="button" class="fb-source-head" @onclick="() => Toggle(s.TableName)" aria-expanded="@(open ? "true" : "false")">
+                            <Icon Name="chevron-right" Size="14" Class="fb-caret" />
+                            <span class="fb-source-title">@s.Title</span>
+                            <span class="fb-source-meta">@Granularity(s)@(s.RowCount > 0 ? $" · {s.RowCount.ToString("N0", Tr)} satır" : "")</span>
+                        </button>
+                        @if (open)
+                        {
+                            <div class="fb-fields">
+                                @foreach (var f in fields)
+                                {
+                                    var table = s.TableName;
+                                    var column = f.Column;
+                                    <div class="fb-chip fb-chip-field" role="button" tabindex="0" draggable="true"
+                                         title="Formüle eklemek için sürükleyin ya da tıklayın"
+                                         @ondragstart="() => StartNew(() => [FormulaToken.Field(table, column)])"
+                                         @ondragend="EndDrag"
+                                         @onclick="() => InsertAsync([FormulaToken.Field(table, column)])"
+                                         @onkeydown="e => ActivateOnEnter(e, [FormulaToken.Field(table, column)])">
+                                        <Icon Name="database" Size="13" />
+                                        <span>@f.Label</span>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+
+                @if (searching && visible.Count > 60)
+                {
+                    <p class="muted fb-pad">İlk 60 tablo gösteriliyor, aramayı daraltın.</p>
+                }
+            }
+        </div>
+
+        @if (IsMoving)
+        {
+            <div class="fb-trash-hint"><Icon Name="trash" Size="16" /> Formülden çıkarmak için buraya bırakın</div>
+        }
+    </aside>
+
+    <div class="fb-main">
+        <div class="fb-tools">
+            <div class="fb-tool-group">
+                <span class="fb-tool-label">İşlem</span>
+                @foreach (var (op, symbol, hint) in FormulaTokens.Operators)
+                {
+                    var o = op;
+                    <div class="fb-chip fb-chip-op" role="button" tabindex="0" draggable="true" title="@hint"
+                         @ondragstart="() => StartNew(() => [FormulaToken.Op(o)])" @ondragend="EndDrag"
+                         @onclick="() => InsertAsync([FormulaToken.Op(o)])"
+                         @onkeydown="e => ActivateOnEnter(e, [FormulaToken.Op(o)])">@symbol</div>
+                }
+                <div class="fb-chip fb-chip-op" role="button" tabindex="0" draggable="true" title="Parantez aç"
+                     @ondragstart="() => StartNew(() => [FormulaToken.Open()])" @ondragend="EndDrag"
+                     @onclick="() => InsertAsync([FormulaToken.Open()])"
+                     @onkeydown="e => ActivateOnEnter(e, [FormulaToken.Open()])">(</div>
+                <div class="fb-chip fb-chip-op" role="button" tabindex="0" draggable="true" title="Parantez kapat"
+                     @ondragstart="() => StartNew(() => [FormulaToken.Close()])" @ondragend="EndDrag"
+                     @onclick="() => InsertAsync([FormulaToken.Close()])"
+                     @onkeydown="e => ActivateOnEnter(e, [FormulaToken.Close()])">)</div>
+                <div class="fb-chip fb-chip-num" role="button" tabindex="0" draggable="true" title="Sabit bir sayı ekle"
+                     @ondragstart="() => StartNew(NumberSeed)" @ondragend="EndDrag"
+                     @onclick="() => InsertAsync(NumberSeed())"
+                     @onkeydown="e => ActivateOnEnter(e, NumberSeed())">123 Sayı</div>
+            </div>
+            <div class="fb-tool-group">
+                <span class="fb-tool-label">İşlev</span>
+                @foreach (var fn in FormulaTokens.Functions)
+                {
+                    var f = fn;
+                    <div class="fb-chip fb-chip-fn" role="button" tabindex="0" draggable="true" title="@f.Hint"
+                         @ondragstart="() => StartNew(() => FormulaTokens.FunctionTemplate(f), cursorOffset: 1)" @ondragend="EndDrag"
+                         @onclick="() => InsertAsync(FormulaTokens.FunctionTemplate(f), cursorOffset: 1)"
+                         @onkeydown="e => ActivateOnEnter(e, FormulaTokens.FunctionTemplate(f), cursorOffset: 1)">@f.Label</div>
+                }
+            </div>
+        </div>
+
+        <div class="fb-canvas @(_drag is not null ? "is-dragging" : "") @(_tokens.Count == 0 ? "is-empty" : "")"
+             tabindex="0" aria-label="Formül alanı. Silmek için Backspace, gezinmek için ok tuşları."
+             @ondragover:preventDefault
+             @ondragenter="() => _hover = _tokens.Count"
+             @ondrop="() => DropAtAsync(_tokens.Count)"
+             @onclick="() => _cursor = _tokens.Count"
+             @onkeydown="OnKeyAsync">
+            @if (_textOnly)
+            {
+                <div class="fb-empty">
+                    <Icon Name="info" Size="22" />
+                    <strong>Bu formül görsel olarak gösterilemiyor</strong>
+                    <span>Aşağıdaki metin kutusundan düzenleyebilir ya da temizleyip yeniden oluşturabilirsiniz.</span>
+                </div>
+            }
+            else if (_tokens.Count == 0)
+            {
+                <div class="fb-empty">
+                    <Icon Name="function" Size="26" />
+                    <strong>Soldan bir veri alanını buraya sürükleyin</strong>
+                    <span>Sonra işlem ekleyin (× ÷ + −) ve ikinci veriyi bırakın. Tıklayarak da ekleyebilirsiniz.</span>
+                </div>
+            }
+            else
+            {
+                @for (var i = 0; i < _tokens.Count; i++)
+                {
+                    var index = i;
+                    var t = _tokens[i];
+                    @Gap(index)
+                    <div class="fb-tok @TokenClass(t)" draggable="true" @key="t"
+                         @ondragstart="() => StartMove(index)" @ondragstart:stopPropagation @ondragend="EndDrag"
+                         @onclick="() => _cursor = index + 1" @onclick:stopPropagation>
+                        @switch (t.Kind)
+                        {
+                            case FormulaTokenKind.Field:
+                                var info = Lookup.Find(t);
+                                <span class="fb-tok-text">
+                                    <span class="fb-tok-label" title="@t.Key">@(info?.Label ?? t.Key)</span>
+                                    <small>@(info?.Source ?? "Katalogda bulunamadı")</small>
+                                </span>
+                                <select class="fb-agg" value="@t.Aggregate" title="Aynı gün/saate birden çok satır düşerse nasıl birleştirilsin?"
+                                        @onchange="e => SetAggregateAsync(t, e.Value)" @onclick:stopPropagation>
+                                    @foreach (var (aggCode, aggLabel, aggHint) in FormulaTokens.Aggregates)
+                                    {
+                                        <option value="@aggCode" title="@aggHint">@aggLabel</option>
+                                    }
+                                </select>
+                                break;
+                            case FormulaTokenKind.Number:
+                                <input class="fb-num" type="text" inputmode="decimal" value="@t.Text"
+                                       style="width:@(Math.Max(2, t.Text.Length + 1))ch"
+                                       aria-label="Sayı"
+                                       @onchange="e => SetNumberAsync(t, e.Value)"
+                                       @onkeydown:stopPropagation @onclick:stopPropagation />
+                                break;
+                            case FormulaTokenKind.Operator:
+                                <span>@FormulaTokens.OperatorSymbol(t.Text)</span>
+                                break;
+                            case FormulaTokenKind.Function:
+                                <span>@FormulaTokens.FunctionLabel(t.Text) (</span>
+                                break;
+                            case FormulaTokenKind.Comma:
+                                <span title="Argüman ayırıcı">;</span>
+                                break;
+                            default:
+                                <span>@t.Text</span>
+                                break;
+                        }
+                        <button type="button" class="fb-tok-x" title="Kaldır" aria-label="Kaldır"
+                                @onclick="() => RemoveAtAsync(index)" @onclick:stopPropagation>
+                            <Icon Name="x" Size="12" />
+                        </button>
+                        @if (_drag is not null && _drag.MoveFrom != index)
+                        {
+                            @* Parçanın sol/sağ yarısına bırakınca önüne/arkasına ekler. *@
+                            <span class="fb-half fb-half-l" @ondragenter="() => _hover = index" @ondragenter:stopPropagation @ondragover:preventDefault
+                                  @ondrop="() => DropAtAsync(index)" @ondrop:stopPropagation></span>
+                            <span class="fb-half fb-half-r" @ondragenter="() => _hover = index + 1" @ondragenter:stopPropagation @ondragover:preventDefault
+                                  @ondrop="() => DropAtAsync(index + 1)" @ondrop:stopPropagation></span>
+                        }
+                    </div>
+                }
+                @Gap(_tokens.Count)
+            }
+        </div>
+
+        <div class="fb-footer">
+            @{ var balance = FormulaTokens.ParenBalance(_tokens); }
+            @if (balance > 0)
+            {
+                <span class="badge badge-warn">@balance parantez kapatılmadı</span>
+            }
+            else if (balance < 0)
+            {
+                <span class="badge badge-warn">Fazladan @(-balance) kapanan parantez var</span>
+            }
+            <span class="muted fb-help">Parçaları sürükleyerek yerini değiştirin, sola sürükleyerek çıkarın. Klavye: ← → gezin, ⌫ sil.</span>
+            <span class="toolbar-spacer"></span>
+            @if (_tokens.Count > 0 || _textOnly)
+            {
+                <button type="button" class="btn btn-sm btn-ghost" @onclick="ClearAsync"><Icon Name="trash" Size="14" /> Temizle</button>
+            }
+        </div>
+
+        <details class="disclosure fb-text" open="@_textOnly">
+            <summary>Metin olarak düzenle (gelişmiş)</summary>
+            <textarea class="code-input" rows="3" @bind="_rawText" @bind:after="ApplyTextAsync"
+                      placeholder="[markets_dam_data_mcp.price] * 2"></textarea>
+        </details>
+    </div>
+</div>
+
+@code {
+    private static readonly CultureInfo Tr = CultureInfo.GetCultureInfo("tr-TR");
+
+    [Parameter] public string? Expression { get; set; }
+    [Parameter] public EventCallback<string> ExpressionChanged { get; set; }
+    [Parameter] public List<FormulaSourceDto>? Sources { get; set; }
+    [Parameter] public FormulaFieldLookup Lookup { get; set; } = FormulaFieldLookup.Empty;
+
+    private sealed record DragPayload(Func<List<FormulaToken>>? Create, int? MoveFrom, int CursorOffset);
+
+    private List<FormulaToken> _tokens = new();
+    private string? _lastExpression;
+    private string _rawText = "";
+    private bool _textOnly;
+    private int _cursor;
+    private int _hover = -1;
+    private DragPayload? _drag;
+
+    private string _search = "";
+    private bool _onlyWithData = true;
+    private bool _anyWithData;
+    private readonly HashSet<string> _expanded = new(StringComparer.OrdinalIgnoreCase);
+
+    private bool IsMoving => _drag?.MoveFrom is not null;
+
+    private static List<FormulaToken> NumberSeed() => [FormulaToken.Number("1")];
+
+    protected override void OnParametersSet()
+    {
+        _anyWithData = Sources?.Any(s => s.RowCount > 0) == true;
+
+        var expression = Expression ?? "";
+        if (expression == _lastExpression) return;
+
+        // Dışarıdan yeni bir ifade geldi (düzenle / yeni): parçalara ayır.
+        _lastExpression = expression;
+        _rawText = expression;
+        var parsed = FormulaTokens.Parse(expression);
+        _textOnly = parsed is null;
+        _tokens = parsed ?? new();
+        _cursor = _tokens.Count;
+    }
+
+    // -- sol panel ----------------------------------------------------------
+
+    private IEnumerable<(FormulaSourceDto Source, List<FormulaSourceFieldDto> Fields)> VisibleSources()
+    {
+        var q = _search.Trim();
+        foreach (var s in Sources ?? [])
+        {
+            if (_onlyWithData && _anyWithData && s.RowCount == 0 && q.Length == 0) continue;
+
+            if (q.Length == 0)
+            {
+                yield return (s, s.Fields);
+                continue;
+            }
+
+            var sourceHit = Matches(s.Title, q) || Matches(s.Tag, q) || Matches(s.TableName, q);
+            var fields = sourceHit
+                ? s.Fields
+                : s.Fields.Where(f => Matches(f.Label, q) || Matches(f.Column, q)).ToList();
+            if (fields.Count > 0) yield return (s, fields);
+        }
+    }
+
+    /// <summary>Büyük/küçük harf ve aksan duyarsız ("tuketim" → "Tüketim").</summary>
+    private static bool Matches(string? text, string query) =>
+        text is not null &&
+        Tr.CompareInfo.IndexOf(text, query, CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace) >= 0;
+
+    private static string Granularity(FormulaSourceDto s) =>
+        s.HasHour ? "saatlik" : s.HasDate ? "günlük" : "tarihsiz";
+
+    private void Toggle(string table)
+    {
+        if (!_expanded.Remove(table)) _expanded.Add(table);
+    }
+
+    // -- sürükle-bırak ------------------------------------------------------
+
+    private void StartNew(Func<List<FormulaToken>> create, int cursorOffset = -1) =>
+        _drag = new DragPayload(create, null, cursorOffset);
+
+    private void StartMove(int index) => _drag = new DragPayload(null, index, -1);
+
+    private void EndDrag()
+    {
+        _drag = null;
+        _hover = -1;
+    }
+
+    private async Task DropAtAsync(int index)
+    {
+        var drag = _drag;
+        EndDrag();
+        if (drag is null) return;
+
+        if (drag.MoveFrom is int from)
+        {
+            if (from == index || from + 1 == index) return;
+            var token = _tokens[from];
+            _tokens.RemoveAt(from);
+            if (from < index) index--;
+            _tokens.Insert(index, token);
+            _cursor = index + 1;
+            await EmitAsync();
+        }
+        else if (drag.Create is not null)
+        {
+            await InsertAtAsync(index, drag.Create(), drag.CursorOffset);
+        }
+    }
+
+    private async Task DropOnPaletteAsync()
+    {
+        var drag = _drag;
+        EndDrag();
+        if (drag?.MoveFrom is int from) await RemoveAtAsync(from);
+    }
+
+    // -- düzenleme ----------------------------------------------------------
+
+    private Task InsertAsync(List<FormulaToken> items, int cursorOffset = -1) =>
+        InsertAtAsync(Math.Clamp(_cursor, 0, _tokens.Count), items, cursorOffset);
+
+    private async Task ActivateOnEnter(KeyboardEventArgs e, List<FormulaToken> items, int cursorOffset = -1)
+    {
+        if (e.Key is "Enter" or " ") await InsertAsync(items, cursorOffset);
+    }
+
+    private async Task InsertAtAsync(int index, List<FormulaToken> items, int cursorOffset)
+    {
+        if (_textOnly)
+        {
+            // Metin modundaki çözümlenemeyen ifade, görsel düzenlemeye başlanınca bırakılır.
+            _tokens.Clear();
+            _textOnly = false;
+            index = 0;
+        }
+
+        _tokens.InsertRange(index, items);
+        // İşlev kalıbında imleç parantezin içine konur; sıradaki parça oraya girer.
+        _cursor = index + (cursorOffset >= 0 ? cursorOffset : items.Count);
+        await EmitAsync();
+    }
+
+    private async Task RemoveAtAsync(int index)
+    {
+        if (index < 0 || index >= _tokens.Count) return;
+        _tokens.RemoveAt(index);
+        if (_cursor > index) _cursor--;
+        await EmitAsync();
+    }
+
+    private async Task SetAggregateAsync(FormulaToken token, object? value)
+    {
+        token.Aggregate = value?.ToString() ?? "AVG";
+        await EmitAsync();
+    }
+
+    private async Task SetNumberAsync(FormulaToken token, object? value)
+    {
+        token.Text = FormulaTokens.NormalizeNumber(value?.ToString() ?? "");
+        await EmitAsync();
+    }
+
+    private async Task ClearAsync()
+    {
+        _tokens.Clear();
+        _textOnly = false;
+        _cursor = 0;
+        await EmitAsync();
+    }
+
+    private async Task OnKeyAsync(KeyboardEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case "Backspace": if (_cursor > 0) await RemoveAtAsync(_cursor - 1); return;
+            case "Delete": await RemoveAtAsync(_cursor); return;
+            case "ArrowLeft": _cursor = Math.Max(0, _cursor - 1); return;
+            case "ArrowRight": _cursor = Math.Min(_tokens.Count, _cursor + 1); return;
+            case "Home": _cursor = 0; return;
+            case "End": _cursor = _tokens.Count; return;
+            case "(": await InsertAsync([FormulaToken.Open()]); return;
+            case ")": await InsertAsync([FormulaToken.Close()]); return;
+            case "+" or "-" or "*" or "/" or "^" or "%": await InsertAsync([FormulaToken.Op(e.Key)]); return;
+        }
+
+        if (e.Key.Length == 1 && (char.IsDigit(e.Key[0]) || e.Key is "," or "."))
+        {
+            // Sayı yazımı: imleçten önce sayı varsa ona eklenir.
+            if (_cursor > 0 && _tokens[_cursor - 1] is { Kind: FormulaTokenKind.Number } num)
+            {
+                num.Text = e.Key is "," or "." ? (num.Text.Contains('.') ? num.Text : num.Text + ".") : num.Text + e.Key;
+                await EmitAsync();
+            }
+            else if (char.IsDigit(e.Key[0]))
+            {
+                await InsertAsync([FormulaToken.Number(e.Key)]);
+            }
+        }
+    }
+
+    private async Task ApplyTextAsync()
+    {
+        var parsed = FormulaTokens.Parse(_rawText);
+        _textOnly = parsed is null;
+        _tokens = parsed ?? new();
+        _cursor = _tokens.Count;
+
+        _lastExpression = _rawText;
+        await ExpressionChanged.InvokeAsync(_rawText);
+    }
+
+    private async Task EmitAsync()
+    {
+        var expression = FormulaTokens.ToExpression(_tokens);
+        _lastExpression = expression;
+        _rawText = expression;
+        await ExpressionChanged.InvokeAsync(expression);
+    }
+
+    // -- görünüm ------------------------------------------------------------
+
+    private RenderFragment Gap(int index) => __builder =>
+    {
+        <span class="fb-gap @(index == _cursor ? "is-cursor" : "") @(index == _hover && _drag is not null ? "is-hover" : "")"
+              @onclick="() => _cursor = index" @onclick:stopPropagation
+              @ondragenter="() => _hover = index" @ondragenter:stopPropagation
+              @ondragover:preventDefault
+              @ondrop="() => DropAtAsync(index)" @ondrop:stopPropagation></span>
+    };
+
+    private string TokenClass(FormulaToken t)
+    {
+        var cls = t.Kind switch
+        {
+            FormulaTokenKind.Field => Lookup.Find(t) is null ? "fb-tok-field is-unknown" : "fb-tok-field",
+            FormulaTokenKind.Number => "fb-tok-num",
+            FormulaTokenKind.Function => "fb-tok-fn",
+            FormulaTokenKind.Operator => "fb-tok-op",
+            _ => "fb-tok-paren"
+        };
+        return _drag?.MoveFrom is int m && _tokens.IndexOf(t) == m ? cls + " is-moving" : cls;
+    }
+}

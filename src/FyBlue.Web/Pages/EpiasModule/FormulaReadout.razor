@@ -1,0 +1,50 @@
+@* Kayıtlı bir formülü, oluşturucudaki gibi okunur parçalar hâlinde gösterir. *@
+
+@if (_tokens is null)
+{
+    <code class="formula-expr">@Expression</code>
+}
+else
+{
+    <div class="fb-readout" title="@Expression">
+        @foreach (var t in _tokens)
+        {
+            @switch (t.Kind)
+            {
+                case FormulaTokenKind.Field:
+                    var info = Lookup.Find(t);
+                    <span class="fb-tok fb-tok-field fb-tok-static @(info is null ? "is-unknown" : "")">
+                        <span class="fb-tok-text">
+                            <span class="fb-tok-label">@(info?.Label ?? t.Key)</span>
+                            <small>@(info?.Source ?? "Katalogda bulunamadı")@(t.Aggregate != "AVG" ? $" · {FormulaTokens.AggregateLabel(t.Aggregate)}" : "")</small>
+                        </span>
+                    </span>
+                    break;
+                case FormulaTokenKind.Number:
+                    <span class="fb-tok fb-tok-num fb-tok-static">@t.Text</span>
+                    break;
+                case FormulaTokenKind.Operator:
+                    <span class="fb-tok fb-tok-op fb-tok-static">@FormulaTokens.OperatorSymbol(t.Text)</span>
+                    break;
+                case FormulaTokenKind.Function:
+                    <span class="fb-tok fb-tok-fn fb-tok-static">@FormulaTokens.FunctionLabel(t.Text) (</span>
+                    break;
+                case FormulaTokenKind.Comma:
+                    <span class="fb-tok fb-tok-paren fb-tok-static">;</span>
+                    break;
+                default:
+                    <span class="fb-tok fb-tok-paren fb-tok-static">@t.Text</span>
+                    break;
+            }
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public string? Expression { get; set; }
+    [Parameter] public FormulaFieldLookup Lookup { get; set; } = FormulaFieldLookup.Empty;
+
+    private List<FormulaToken>? _tokens;
+
+    protected override void OnParametersSet() => _tokens = FormulaTokens.Parse(Expression);
+}

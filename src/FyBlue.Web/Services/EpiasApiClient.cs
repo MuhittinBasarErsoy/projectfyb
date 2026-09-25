@@ -59,6 +59,9 @@ public sealed class EpiasApiClient(ApiHttp api)
     public async Task<List<FormulaDto>> GetFormulasAsync(CancellationToken ct = default) =>
         await api.GetAsync<List<FormulaDto>>("api/epias/formulas", ct) ?? new();
 
+    public async Task<List<FormulaSourceDto>> GetFormulaSourcesAsync(CancellationToken ct = default) =>
+        await api.GetAsync<List<FormulaSourceDto>>("api/epias/formulas/sources", ct) ?? new();
+
     public Task<FormulaValidationResult?> ValidateFormulaAsync(FormulaPreviewRequest request, CancellationToken ct = default) =>
         api.PostAllowingResultErrorsAsync<FormulaValidationResult>("api/epias/formulas/validate", request, ct);
 
