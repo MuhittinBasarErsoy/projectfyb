@@ -232,6 +232,7 @@ if (app.Environment.IsDevelopment() || builder.Configuration.GetValue("ExposeApi
 // Blazor WASM istemcisini aynı sunucudan sun (tek uygulama, tek origin).
 // Dosya adları parmak izi taşımadığı için (WasmFingerprintAssets=false) tarayıcı her
 // açılışta ETag ile yeniden doğrulasın; yoksa güncellemeden sonra eski app.css/js kalır.
+// index.html'deki ?v= parametresi, bu başlık gelmeden önce önbelleğe alınmış kopyaları aşar.
 var staticFiles = new StaticFileOptions
 {
     OnPrepareResponse = ctx => ctx.Context.Response.Headers.CacheControl = "no-cache"
