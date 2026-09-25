@@ -1,14 +1,18 @@
 # Ubuntu sunucuda Tailscale ile canlıya alma
 
-FyBlue, sunucuda **hiçbir port internete açılmadan** Tailscale ağı (tailnet) üzerinden yayınlanır.
-HTTPS sertifikasını Tailscale verir; adres `https://fyblue.<tailnet>.ts.net` olur ve yalnızca
-tailnet'e katılmış cihazlar erişebilir.
+FyBlue, sunucuda **hiçbir port internete açılmadan** Tailscale üzerinden yayınlanır.
+HTTPS sertifikasını Tailscale verir; adres `https://fyblue.<tailnet>.ts.net` olur.
+
+- **Web arayüzü (443)** — **Tailscale Funnel** ile herkese açıktır: Tailscale yüklü olmayan
+  cihazlar da erişir.
+- **Veritabanı (1433)** — yalnızca tailnet'e katılmış cihazlar erişir (Funnel dışında).
 
 ```
-Tailnet cihazları ──HTTPS──► fyblue-ts (Tailscale düğümü, TLS burada)
-                                 │  Docker ağı
-                                 ▼
-                             fyblue-app :8080 ──► fyblue-mssql :1433
+İnternet ──HTTPS──► Tailscale Funnel ──┐
+Tailnet cihazları ──HTTPS / 1433───────┴─► fyblue-ts (Tailscale düğümü, TLS burada)
+                                               │  Docker ağı
+                                               ▼
+                                           fyblue-app :8080 ──► fyblue-mssql :1433
 ```
 
 ## 1. Ön koşullar
@@ -33,6 +37,16 @@ sudo usermod -aG docker $USER   # sonra oturumu kapatıp açın
 
 1. **DNS** → *MagicDNS* açık, *HTTPS Certificates* → **Enable**.
 2. **Settings → Keys → Generate auth key**: *Reusable* kapalı, *Ephemeral* kapalı. `tskey-auth-…` değerini kopyalayın.
+3. **Access Controls** → politika dosyasına Funnel izni ekleyin (yoksa web arayüzü yalnızca tailnet'ten açılır):
+
+   ```json
+   "nodeAttrs": [
+     { "target": ["autogroup:member"], "attr": ["funnel"] }
+   ]
+   ```
+
+   Daha dar tutmak için `target` olarak düğümün sahibini (`"kullanici@ornek.com"`) veya bir etiketi
+   (`"tag:fyblue"`) yazın. Funnel yalnızca 443/8443/10000 portlarını açabilir; 1433 bu yüzden tailnet içinde kalır.
 
 ## 2. Kodu sunucuya alın
 
@@ -74,8 +88,22 @@ docker compose -f docker-compose.tailscale.yml up -d --build
 docker compose -f docker-compose.tailscale.yml logs -f app
 ```
 
-`163 endpoint tablosu hazır.` satırını görünce tailnet'teki bir cihazdan açın:
+`163 endpoint tablosu hazır.` satırını görünce herhangi bir cihazdan (Tailscale gerekmez) açın:
 `https://fyblue.<tailnet>.ts.net` → Kayıt ol → Bağlı Hesaplar.
+
+Funnel'ın açık olduğunu doğrulamak için:
+
+```bash
+docker exec fyblue-ts tailscale funnel status
+```
+
+Çıktıda `(Funnel on)` görünmeli. Görünmüyorsa 1. adımdaki `funnel` izni eksiktir. Politikayı
+düzelttikten sonra `docker compose -f docker-compose.tailscale.yml restart ts` çalıştırın. İlk açılışta
+genel DNS kaydının yayılması birkaç dakika sürebilir.
+
+> **Güvenlik:** Uygulama artık internete açıktır; `/register` herkese açıktır. `JWT_KEY` ve
+> `HANGFIRE_PASSWORD` güçlü olmalı, `EXPOSE_API_DOCS=false` kalmalıdır. Herkese açmayı geri almak için
+> `docker/tailscale/serve.json` dosyasından `AllowFunnel` bölümünü silip `ts` servisini yeniden başlatın.
 
 Düğüm tailnet'e katıldıktan sonra `TS_AUTHKEY` artık gerekmez (kimlik `ts-state` biriminde saklanır).
 

@@ -3,8 +3,8 @@
 #   cp .env.example .env   # TS_AUTHKEY, JWT_KEY, MSSQL_SA_PASSWORD doldurun
 #   docker compose -f docker-compose.tailscale.yml up -d --build
 #
-# Adres (MagicDNS): https://<TS_HOSTNAME>.<tailnet>.ts.net
-# Veritabanı (SSMS): <TS_HOSTNAME>.<tailnet>.ts.net, SQL Server kimlik doğrulaması, sa
+# Adres: https://<TS_HOSTNAME>.<tailnet>.ts.net — Tailscale Funnel ile herkese açık (internet).
+# Veritabanı (SSMS): <TS_HOSTNAME>.<tailnet>.ts.net — yalnızca tailnet'ten, SQL Server kimlik doğrulaması, sa
 # TLS sertifikasını Tailscale sağlar (admin konsolu → DNS → HTTPS Certificates açık olmalı).
 # Ayrıntılar: docs/DEPLOY.md
 
