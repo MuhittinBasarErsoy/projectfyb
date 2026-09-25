@@ -85,10 +85,55 @@ public sealed class FormulaCompilerTests
             Options.Create(new StorageOptions { ConnectionString = "Server=(local);Database=x;" }),
             NullLogger<DynamicTableStore>.Instance);
 
-        return new FormulaCompiler(catalog, store);
+        return new FormulaCompiler(catalog, store, new StubSourceProvider());
     }
 
     private static readonly FormulaCompiler Compiler = CreateCompiler();
+
+    private sealed class StubSourceProvider : IFormulaSourceProvider
+    {
+        public IReadOnlyList<ExternalFormulaSource> Sources { get; } =
+        [
+            new ExternalFormulaSource
+            {
+                Name = "osos_weather",
+                Title = "Hava durumu",
+                Tag = "OSOS",
+                Schema = "dbo",
+                Table = "Rows_Weather",
+                TimestampColumn = "time",
+                HasHour = true,
+                Fields = [new ExternalFormulaField("temperature_2m", "Sıcaklık")],
+                OwnerColumn = "AppUserId",
+                VersionColumn = "SearchHistoryId",
+                VersionPartitionColumns = ["Serno"]
+            }
+        ];
+
+        public Task RefreshAsync(bool force = false, CancellationToken ct = default) => Task.CompletedTask;
+    }
+
+    [Fact]
+    public void Osos_kaynagi_kullaniciya_gore_suzulur_ve_epias_ile_hizalanir()
+    {
+        var compiled = Compiler.Compile(
+            "[markets_dam_data_mcp.price] * [osos_weather.temperature_2m]", AlignmentMode.DateHour);
+
+        Assert.Contains("[dbo].[Rows_Weather]", compiled.Sql);
+        Assert.Contains("@appUserId", compiled.Sql);
+        Assert.Contains("[__latest]", compiled.Sql);   // yinelenen sorgulardan yalnızca en sonuncusu
+        Assert.Contains("TRY_CAST(TRY_CAST([temperature_2m] AS FLOAT)", compiled.Sql);
+        Assert.Contains("LEFT JOIN", compiled.Sql);
+        Assert.Equal(["markets_dam_data_mcp", "osos_weather"], compiled.ReferencedTables);
+    }
+
+    [Fact]
+    public void Osos_kaynaginda_olmayan_alan_anlasilir_hata_verir()
+    {
+        var ex = Assert.Throws<FormulaException>(() =>
+            Compiler.Compile("[osos_weather.olmayan] * 2", AlignmentMode.DateHour));
+        Assert.Contains("temperature_2m", ex.Message);
+    }
 
     [Fact]
     public void Ptf_carpi_sabit_sql_uretir()
@@ -122,7 +167,8 @@ public sealed class FormulaCompilerTests
             "[markets_dam_data_mcp.price] / 5", AlignmentMode.DateHour, "ptf_bolu_bes");
 
         // T-SQL iç içe WITH kabul etmez; INSERT tek bir WITH zinciri olmalı.
-        Assert.Equal(1, CountOccurrences(compiled.InsertSql, "WITH\n"));
+        // Ham dize satır sonları kaynak dosyanınkini izler (Windows'ta CRLF olabilir).
+        Assert.Equal(1, CountOccurrences(compiled.InsertSql.Replace("\r\n", "\n"), "WITH\n"));
         Assert.Contains("INSERT INTO [formula].[ptf_bolu_bes]", compiled.InsertSql);
         Assert.Contains("HASHBYTES('SHA2_256'", compiled.InsertSql);
         Assert.Contains("NOT EXISTS", compiled.InsertSql);

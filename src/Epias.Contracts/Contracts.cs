@@ -184,6 +184,27 @@ public sealed class FormulaRowDto
     public decimal? Value { get; set; }
 }
 
+/// <summary>Formül oluşturucuda sürüklenebilir veri kaynağı (tek bir veri tablosu).</summary>
+public sealed class FormulaSourceDto
+{
+    public string Key { get; set; } = "";
+    public string Title { get; set; } = "";
+    public string Tag { get; set; } = "";
+    public string TableName { get; set; } = "";
+    public long RowCount { get; set; }
+    public bool HasDate { get; set; }
+    public bool HasHour { get; set; }
+    /// <summary>Yalnızca sayısal (formülde kullanılabilir) alanlar.</summary>
+    public List<FormulaSourceFieldDto> Fields { get; set; } = new();
+}
+
+public sealed class FormulaSourceFieldDto
+{
+    public string Column { get; set; } = "";
+    /// <summary>Kullanıcıya gösterilecek ad (Swagger açıklaması ya da okunur hale getirilmiş alan adı).</summary>
+    public string Label { get; set; } = "";
+}
+
 /// <summary>Ad-hoc (kaydedilmemiş) formül denemesi için.</summary>
 public sealed class FormulaPreviewRequest
 {
@@ -218,5 +239,6 @@ public sealed class ApiError
 [JsonSerializable(typeof(FormulaRunRequest))]
 [JsonSerializable(typeof(FormulaRunResult))]
 [JsonSerializable(typeof(FormulaPreviewRequest))]
+[JsonSerializable(typeof(List<FormulaSourceDto>))]
 [JsonSerializable(typeof(ApiError))]
 public partial class EpiasJsonContext : JsonSerializerContext;

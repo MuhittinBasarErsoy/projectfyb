@@ -12,8 +12,13 @@ public sealed class FormulaService(
     EpiasDbContext db,
     FormulaCompiler compiler,
     DynamicTableStore store,
-    ILogger<FormulaService> logger)
+    ILogger<FormulaService> logger,
+    IFormulaSourceProvider? external = null)
 {
+    /// <summary>Harici kaynak (OSOS) listesini derlemeden önce tazeler.</summary>
+    private Task RefreshSourcesAsync(CancellationToken ct) =>
+        external?.RefreshAsync(ct: ct) ?? Task.CompletedTask;
+
     public async Task<List<FormulaDto>> ListAsync(CancellationToken ct = default)
     {
         var entities = await db.Formulas.AsNoTracking().OrderBy(f => f.Name).ToListAsync(ct);
@@ -26,8 +31,10 @@ public sealed class FormulaService(
         return f is null ? null : ToDto(f);
     }
 
-    public FormulaValidationResult Validate(string expression, string alignmentMode)
+    public async Task<FormulaValidationResult> ValidateAsync(
+        string expression, string alignmentMode, CancellationToken ct = default)
     {
+        await RefreshSourcesAsync(ct);
         try
         {
             var compiled = compiler.Compile(expression, FormulaCompiler.ParseMode(alignmentMode));
@@ -48,6 +55,7 @@ public sealed class FormulaService(
     public async Task<FormulaDto> SaveAsync(FormulaDto dto, string? user, CancellationToken ct = default)
     {
         // Kaydetmeden önce derlenebilirliği garanti et.
+        await RefreshSourcesAsync(ct);
         var mode = FormulaCompiler.ParseMode(dto.AlignmentMode);
         var outputTable = string.IsNullOrWhiteSpace(dto.OutputTable)
             ? null
@@ -94,13 +102,16 @@ public sealed class FormulaService(
     // -----------------------------------------------------------------------
 
     /// <summary>Kaydedilmemiş bir ifadeyi çalıştırıp önizleme döner.</summary>
-    public async Task<FormulaRunResult> PreviewAsync(FormulaPreviewRequest request, CancellationToken ct = default)
+    /// <param name="appUserId">OSOS gibi kullanıcıya ait kaynaklarda yalnızca bu kullanıcının satırları okunur.</param>
+    public async Task<FormulaRunResult> PreviewAsync(
+        FormulaPreviewRequest request, string? appUserId, CancellationToken ct = default)
     {
         var sw = Stopwatch.StartNew();
+        await RefreshSourcesAsync(ct);
         try
         {
             var compiled = compiler.Compile(request.Expression, FormulaCompiler.ParseMode(request.AlignmentMode));
-            var rows = await ReadRowsAsync(compiled.Sql, request.From, request.To, request.MaxRows, ct);
+            var rows = await ReadRowsAsync(compiled.Sql, request.From, request.To, request.MaxRows, appUserId, ct);
 
             return new FormulaRunResult
             {
@@ -121,8 +132,11 @@ public sealed class FormulaService(
         }
     }
 
-    public async Task<FormulaRunResult> RunAsync(FormulaRunRequest request, CancellationToken ct = default)
+    public async Task<FormulaRunResult> RunAsync(
+        FormulaRunRequest request, string? appUserId, CancellationToken ct = default)
     {
+        await RefreshSourcesAsync(ct);
+
         var entity = await db.Formulas.FirstOrDefaultAsync(x => x.Id == request.FormulaId, ct)
                      ?? throw new KeyNotFoundException($"{request.FormulaId} numaralı formül yok.");
 
@@ -140,7 +154,7 @@ public sealed class FormulaService(
                 FormulaCompiler.ParseMode(entity.AlignmentMode),
                 entity.OutputTable);
 
-            var rows = await ReadRowsAsync(compiled.Sql, from, to, request.MaxRows, ct);
+            var rows = await ReadRowsAsync(compiled.Sql, from, to, request.MaxRows, appUserId, ct);
 
             var persisted = 0;
             if (request.Persist && !string.IsNullOrWhiteSpace(entity.OutputTable))
@@ -154,7 +168,8 @@ public sealed class FormulaService(
                     ["@from"] = from,
                     ["@to"] = to,
                     ["@maxRows"] = request.MaxRows,
-                    ["@formulaId"] = entity.Id
+                    ["@formulaId"] = entity.Id,
+                    ["@appUserId"] = appUserId
                 }, ct);
             }
 
@@ -193,13 +208,14 @@ public sealed class FormulaService(
     }
 
     private async Task<List<FormulaRowDto>> ReadRowsAsync(
-        string sql, DateTimeOffset? from, DateTimeOffset? to, int maxRows, CancellationToken ct)
+        string sql, DateTimeOffset? from, DateTimeOffset? to, int maxRows, string? appUserId, CancellationToken ct)
     {
         var result = await store.ExecuteSelectAsync(sql, new Dictionary<string, object?>
         {
             ["@from"] = from,
             ["@to"] = to,
-            ["@maxRows"] = Math.Clamp(maxRows, 1, 100_000)
+            ["@maxRows"] = Math.Clamp(maxRows, 1, 100_000),
+            ["@appUserId"] = appUserId
         }, ct);
 
         return result.Rows.Select(r => new FormulaRowDto

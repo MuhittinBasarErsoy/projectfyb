@@ -1,102 +1,116 @@
 @page "/epias/formulas"
 @inject EpiasApiClient Api
+@inject IJSRuntime JS
 
 <PageHeader Module="epias" Title="Formüller"
-            Subtitle="Farklı servislerin tablolarını tarih (ve saat) üzerinden hizalayıp aritmetik işlem yapar. Kolon başvurusu [tablo_adi.kolon_adi] biçimindedir." />
+            Subtitle="Soldaki listeden OSOS sayaç verilerinizi ve EPİAŞ verilerini sürükleyip işlemlerle birleştirin. Farklı kaynaklar gün ve saate göre otomatik eşleştirilir." />
 
 <Alert Kind="error" Text="@_error" OnDismiss="() => _error = null" />
 
+<section class="card">
+    <div class="toolbar">
+        <h2>@(_editing.Id > 0 ? "Formülü düzenle" : "Yeni formül")</h2>
+        <span class="toolbar-spacer"></span>
+        @if (_editing.Id > 0)
+        {
+            <button class="btn btn-sm btn-ghost" @onclick="NewFormula"><Icon Name="plus" Size="15" /> Yeni formül</button>
+        }
+    </div>
+
+    <div class="form-grid">
+        <label class="field"><span>Formülün adı</span><input type="text" @bind="_editing.Name" @bind:after="SyncOutputTable" placeholder="Örn: PTF x Tüketim" /></label>
+        <label class="field"><span>Açıklama <em class="muted">(isteğe bağlı)</em></span><input type="text" @bind="_editing.Description" /></label>
+    </div>
+
+    <FormulaBuilder Expression="@_editing.Expression" ExpressionChanged="OnExpressionChangedAsync"
+                    Sources="_sources" Lookup="_lookup" />
+
+    <div class="fb-status">
+        @if (string.IsNullOrWhiteSpace(_editing.Expression))
+        {
+            <span class="muted">Formül henüz boş.</span>
+        }
+        else if (_validating)
+        {
+            <span class="badge"><Spinner Small="true" /> Kontrol ediliyor…</span>
+        }
+        else if (_validation is { IsValid: true })
+        {
+            <span class="badge badge-ok"><Icon Name="check" Size="13" /> Formül geçerli</span>
+            <span class="muted">@_validation.ReferencedTables.Count veri kaynağı kullanılıyor</span>
+        }
+        else if (_validation is { IsValid: false })
+        {
+            <span class="badge badge-error"><Icon Name="alert" Size="13" /> Hatalı</span>
+            <span class="fb-status-error">@_validation.Error</span>
+        }
+    </div>
+
+    <div class="fb-settings">
+        <div class="field">
+            <span>Sonuçlar nasıl gruplansın?</span>
+            <div class="segmented">
+                @foreach (var (mode, label, _) in AlignmentModes)
+                {
+                    var m = mode;
+                    <button type="button" class="@(_editing.AlignmentMode == m ? "is-active" : "")" @onclick="() => SetAlignmentAsync(m)">@label</button>
+                }
+            </div>
+            <small class="muted">@AlignmentModes.First(a => a.Mode == _editing.AlignmentMode).Hint</small>
+        </div>
+        <label class="field"><span>Önizleme başlangıç</span><input type="date" @bind="_from" /></label>
+        <label class="field"><span>Önizleme bitiş</span><input type="date" @bind="_to" /></label>
+        <label class="field">
+            <span>Sonuç tablosu <em class="muted">(çalıştırınca yazılır)</em></span>
+            <input type="text" @bind="_editing.OutputTable" @bind:after="MarkOutputTouched" placeholder="ptf_x_tuketim" />
+        </label>
+    </div>
+
+    <div class="btn-row">
+        <button class="btn" @onclick="PreviewAsync" disabled="@(_busy || _validation is not { IsValid: true })"><Icon Name="eye" Size="16" /> Önizle</button>
+        <button class="btn btn-primary" @onclick="SaveAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_editing.Name) || _validation is not { IsValid: true })"
+                title="@(string.IsNullOrWhiteSpace(_editing.Name) ? "Önce formüle bir ad verin" : null)">
+            <Icon Name="check-circle" Size="16" /> Kaydet
+        </button>
+        @if (_validation is { IsValid: true, GeneratedSql: not null })
+        {
+            <details class="disclosure fb-sql">
+                <summary>Üretilen SQL</summary>
+                <pre class="code-block">@_validation.GeneratedSql</pre>
+            </details>
+        }
+    </div>
+</section>
+
 <div class="grid-2 grid-align-start">
     <section class="card">
-        <div class="toolbar">
-            <h2>@(_editing.Id > 0 ? "Formülü düzenle" : "Yeni formül")</h2>
-            <span class="toolbar-spacer"></span>
-            @if (_editing.Id > 0)
-            {
-                <button class="btn btn-sm btn-ghost" @onclick="NewFormula"><Icon Name="plus" Size="15" /> Yeni</button>
-            }
-        </div>
-
-        <div class="stack">
-            <label class="field"><span>Ad</span><input type="text" @bind="_editing.Name" placeholder="Örn: PTF x Tüketim / 5" /></label>
-            <label class="field"><span>Açıklama</span><input type="text" @bind="_editing.Description" /></label>
-            <label class="field">
-                <span>İfade</span>
-                <textarea class="code-input" rows="4" @bind="_editing.Expression" @bind:event="oninput"
-                          placeholder="[markets_dam_data_mcp.price] * [consumption_data_realtime_consumption.consumption] / 5"></textarea>
-            </label>
-
-            <div class="form-grid">
-                <label class="field">
-                    <span>Hizalama</span>
-                    <select @bind="_editing.AlignmentMode">
-                        <option value="DateHour">Gün + saat</option>
-                        <option value="Date">Gün</option>
-                        <option value="None">Yok (tek toplam)</option>
-                    </select>
-                </label>
-                <label class="field"><span>Çıktı tablosu</span><input type="text" @bind="_editing.OutputTable" placeholder="ptf_tuketim_carpim" /></label>
-            </div>
-
-            <div class="form-grid">
-                <label class="field"><span>Aralık başlangıç</span><input type="date" @bind="_from" /></label>
-                <label class="field"><span>Aralık bitiş</span><input type="date" @bind="_to" /></label>
-            </div>
-
-            <div class="btn-row">
-                <button class="btn" @onclick="ValidateAsync" disabled="@_busy"><Icon Name="check" Size="16" /> Doğrula</button>
-                <button class="btn" @onclick="PreviewAsync" disabled="@_busy"><Icon Name="eye" Size="16" /> Önizle</button>
-                <button class="btn btn-primary" @onclick="SaveAsync" disabled="@_busy"><Icon Name="check-circle" Size="16" /> Kaydet</button>
-            </div>
-        </div>
-
-        @if (_validation is not null)
+        <h2>Önizleme</h2>
+        @if (_preview is null)
         {
-            <Alert Kind="@(_validation.IsValid ? "ok" : "error")">
-                @if (_validation.IsValid)
-                {
-                    <text>Geçerli. Kullanılan tablolar: @string.Join(", ", _validation.ReferencedTables)</text>
-                }
-                else
-                {
-                    @_validation.Error
-                }
-            </Alert>
-
-            @if (_validation is { IsValid: true, GeneratedSql: not null })
-            {
-                <details class="disclosure">
-                    <summary>Üretilen SQL</summary>
-                    <pre class="code-block">@_validation.GeneratedSql</pre>
-                </details>
-            }
+            <p class="muted">Formülü oluşturup <strong>Önizle</strong>'ye bastığınızda seçili tarih aralığının ilk 200 sonucu burada görünür.</p>
         }
-
-        @if (_preview is not null)
+        else if (_preview.Error is not null)
         {
-            @if (_preview.Error is not null)
-            {
-                <Alert Kind="error" Text="@_preview.Error" />
-            }
-            else
-            {
-                <p class="muted">@_preview.Rows.Count satır · @_preview.ElapsedMs ms</p>
-                <div class="table-wrap table-wrap-short">
-                    <table class="table table-compact">
-                        <thead><tr><th>Tarih</th><th>Saat</th><th class="num">Değer</th></tr></thead>
-                        <tbody>
-                            @foreach (var row in _preview.Rows.Take(200))
-                            {
-                                <tr>
-                                    <td>@(row.Date?.ToString("dd.MM.yyyy") ?? "—")</td>
-                                    <td>@(row.Hour ?? "—")</td>
-                                    <td class="num">@(row.Value?.ToString("N4", CultureInfo.CurrentCulture) ?? "—")</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            }
+            <Alert Kind="error" Text="@_preview.Error" />
+        }
+        else
+        {
+            <p class="muted">@_preview.Rows.Count satır · @_preview.ElapsedMs ms</p>
+            <div class="table-wrap table-wrap-short">
+                <table class="table table-compact">
+                    <thead><tr><th>Tarih</th><th>Saat</th><th class="num">Değer</th></tr></thead>
+                    <tbody>
+                        @foreach (var row in _preview.Rows.Take(200))
+                        {
+                            <tr>
+                                <td>@(row.Date?.ToString("dd.MM.yyyy") ?? "—")</td>
+                                <td>@(row.Hour ?? "—")</td>
+                                <td class="num">@(row.Value?.ToString("N4", CultureInfo.CurrentCulture) ?? "—")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
         }
     </section>
 
@@ -109,7 +123,7 @@
         }
         else if (_formulas.Count == 0)
         {
-            <EmptyState Icon="function" Title="Henüz formül yok" Text="Soldaki formu kullanarak ilk formülünüzü oluşturun." />
+            <EmptyState Icon="function" Title="Henüz formül yok" Text="Yukarıdaki alana veri sürükleyerek ilk formülünüzü oluşturun." />
         }
         else
         {
@@ -125,7 +139,7 @@
                                 <span class="badge badge-info"><code>formula.@f.OutputTable</code></span>
                             }
                         </div>
-                        <code class="formula-expr">@f.Expression</code>
+                        <FormulaReadout Expression="@f.Expression" Lookup="_lookup" />
                         <div class="btn-row">
                             <button class="btn btn-sm" @onclick="() => Edit(f)"><Icon Name="edit" Size="14" /> Düzenle</button>
                             <button class="btn btn-sm btn-primary" @onclick="() => RunAsync(f)"
@@ -159,37 +173,50 @@
 </div>
 
 @code {
+    private static readonly (string Mode, string Label, string Hint)[] AlignmentModes =
+    [
+        ("DateHour", "Saatlik", "Her gün ve saat için ayrı bir sonuç üretilir. Saatlik verilerde (PTF, tüketim, üretim) önerilir."),
+        ("Date", "Günlük", "Her gün için tek bir sonuç üretilir; saatlik değerler seçtiğiniz birleştirmeyle (ortalama, toplam…) güne indirgenir."),
+        ("None", "Tek sonuç", "Seçilen tarih aralığının tamamı için tek bir değer üretilir.")
+    ];
+
     private List<FormulaDto>? _formulas;
+    private List<FormulaSourceDto>? _sources;
+    private FormulaFieldLookup _lookup = FormulaFieldLookup.Empty;
     private FormulaDto _editing = NewDto();
     private FormulaValidationResult? _validation;
     private FormulaRunResult? _preview;
     private FormulaRunResult? _runResult;
     private string? _error;
     private bool _busy;
+    private bool _validating;
+    private bool _outputTouched;
+    private CancellationTokenSource? _validateCts;
 
     private DateTime? _from = DateTime.Today.AddDays(-7);
     private DateTime? _to = DateTime.Today;
 
-    protected override Task OnInitializedAsync() => LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.WhenAll(LoadAsync(), LoadSourcesAsync());
+    }
 
     private static FormulaDto NewDto() => new() { AlignmentMode = "DateHour", IsActive = true };
 
-    private static string AlignmentLabel(string mode) => mode switch
-    {
-        "DateHour" => "Gün + saat",
-        "Date" => "Gün",
-        "None" => "Tek toplam",
-        _ => mode
-    };
+    private static string AlignmentLabel(string mode) =>
+        AlignmentModes.FirstOrDefault(a => a.Mode == mode).Label ?? mode;
 
     private void NewFormula()
     {
+        _validateCts?.Cancel();
         _editing = NewDto();
         _validation = null;
+        _validating = false;
         _preview = null;
+        _outputTouched = false;
     }
 
-    private void Edit(FormulaDto f)
+    private async Task Edit(FormulaDto f)
     {
         _editing = new FormulaDto
         {
@@ -203,8 +230,10 @@
             DefaultTo = f.DefaultTo,
             IsActive = f.IsActive
         };
-        _validation = null;
+        _outputTouched = !string.IsNullOrWhiteSpace(f.OutputTable);
         _preview = null;
+        await JS.InvokeVoidAsync("fyblue.scrollToTop");
+        await ValidateNowAsync();
     }
 
     private async Task LoadAsync()
@@ -213,21 +242,97 @@
         catch (ApiException ex) { _error = ex.Message; _formulas ??= new(); }
     }
 
-    private async Task ValidateAsync()
+    private async Task LoadSourcesAsync()
     {
-        _busy = true;
-        _preview = null;
         try
         {
-            _validation = await Api.ValidateFormulaAsync(new FormulaPreviewRequest
+            _sources = await Api.GetFormulaSourcesAsync();
+            _lookup = new FormulaFieldLookup(_sources);
+        }
+        catch (ApiException ex) { _error = ex.Message; _sources ??= new(); }
+    }
+
+    // -- canlı doğrulama ----------------------------------------------------
+
+    private async Task OnExpressionChangedAsync(string expression)
+    {
+        _editing.Expression = expression;
+        _preview = null;
+
+        _validateCts?.Cancel();
+        var cts = _validateCts = new CancellationTokenSource();
+
+        if (string.IsNullOrWhiteSpace(expression))
+        {
+            _validation = null;
+            _validating = false;
+            return;
+        }
+
+        _validating = true;
+        try { await Task.Delay(400, cts.Token); }
+        catch (TaskCanceledException) { return; }
+
+        await ValidateNowAsync(cts.Token);
+    }
+
+    private async Task ValidateNowAsync(CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(_editing.Expression))
+        {
+            _validation = null;
+            return;
+        }
+
+        _validating = true;
+        try
+        {
+            var result = await Api.ValidateFormulaAsync(new FormulaPreviewRequest
             {
                 Expression = _editing.Expression,
                 AlignmentMode = _editing.AlignmentMode
-            });
+            }, ct);
+            if (!ct.IsCancellationRequested) _validation = result;
         }
+        catch (OperationCanceledException) { return; }
         catch (ApiException ex) { _error = ex.Message; }
-        finally { _busy = false; }
+        finally
+        {
+            if (!ct.IsCancellationRequested) _validating = false;
+        }
     }
+
+    private async Task SetAlignmentAsync(string mode)
+    {
+        _editing.AlignmentMode = mode;
+        _preview = null;
+        await ValidateNowAsync();
+    }
+
+    // -- sonuç tablosu adı ------------------------------------------------
+
+    private void MarkOutputTouched() => _outputTouched = !string.IsNullOrWhiteSpace(_editing.OutputTable);
+
+    /// <summary>Kullanıcı elle yazmadıysa sonuç tablosu adı formül adından türetilir.</summary>
+    private void SyncOutputTable()
+    {
+        if (!_outputTouched) _editing.OutputTable = Slug(_editing.Name);
+    }
+
+    private static string Slug(string? text)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var ch in (text ?? "").ToLower(new CultureInfo("tr-TR")))
+        {
+            var c = ch switch { 'ç' => 'c', 'ğ' => 'g', 'ı' => 'i', 'ö' => 'o', 'ş' => 's', 'ü' => 'u', _ => ch };
+            if (c is >= 'a' and <= 'z' or >= '0' and <= '9') sb.Append(c);
+            else if (sb.Length > 0 && sb[^1] != '_') sb.Append('_');
+        }
+        var slug = sb.ToString().Trim('_');
+        return slug.Length > 60 ? slug[..60].TrimEnd('_') : slug;
+    }
+
+    // -- işlemler -----------------------------------------------------------
 
     private async Task PreviewAsync()
     {

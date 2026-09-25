@@ -34,6 +34,10 @@ window.fyblue = (function () {
             safeSet('fyblue.' + name, value ? '1' : '0');
         },
 
+        scrollToTop: function () {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        },
+
         // Base64 içeriği dosya olarak indirir (CSV dışa aktarma).
         download: function (fileName, base64, mime) {
             const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
@@ -48,3 +52,14 @@ window.fyblue = (function () {
         }
     };
 })();
+
+// Firefox, dataTransfer'a veri yazılmadan sürüklemeyi başlatmaz; Blazor bunu
+// yapamadığı için sürüklenebilir her öğeye boş bir veri eklenir.
+document.addEventListener('dragstart', function (e) {
+    try {
+        if (e.dataTransfer && e.dataTransfer.types.length === 0) {
+            e.dataTransfer.setData('text/plain', '');
+            e.dataTransfer.effectAllowed = 'copyMove';
+        }
+    } catch (err) { /* yok say */ }
+}, true);

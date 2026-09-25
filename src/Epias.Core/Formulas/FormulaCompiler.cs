@@ -27,9 +27,15 @@ public sealed record CompiledFormula(
 /// T-SQL sorgusuna çevirir. Tablo/kolon adları yalnızca katalogda
 /// doğrulandıktan sonra sorguya girer.
 /// </summary>
-public sealed class FormulaCompiler(EndpointCatalog catalog, DynamicTableStore store)
+public sealed class FormulaCompiler(
+    EndpointCatalog catalog,
+    DynamicTableStore store,
+    IFormulaSourceProvider? external = null)
 {
     private const string Numeric = "DECIMAL(38,10)";
+
+    /// <summary>Harici kaynağın zaman damgası: satırdaki metinden türetilen kolon.</summary>
+    private const string TimestampAlias = "__ts";
 
     public static AlignmentMode ParseMode(string? mode) => mode?.Trim().ToLowerInvariant() switch
     {
@@ -68,27 +74,43 @@ public sealed class FormulaCompiler(EndpointCatalog catalog, DynamicTableStore s
         return new CompiledFormula(
             sql,
             insertSql,
-            sources.Select(s => s.Endpoint.TableName).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
-            sources.Select(s => $"{s.Endpoint.TableName}.{s.Field.ColumnName}").Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+            sources.Select(s => s.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+            sources.Select(s => $"{s.Name}.{s.ColumnName}").Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
             mode);
     }
 
     // -----------------------------------------------------------------------
 
+    /// <summary>
+    /// Formüldeki tek bir kolon başvurusunun SQL karşılığı. <see cref="FromSql"/>
+    /// bir tablo ya da alt sorgudur; diğer ifadeler onun kolonlarına başvurur.
+    /// <see cref="FromParam"/>/<see cref="ToParam"/>, tarih süzgecinde @from/@to'nun
+    /// karşılaştırılacağı biçimdir.
+    /// </summary>
     private sealed record Source(
         string Alias,
-        EndpointDescriptor Endpoint,
-        FieldDescriptor Field,
+        string Name,
+        string ColumnName,
         string Aggregate,
-        string? DateColumn,
-        string? HourColumn);
+        string FromSql,
+        string ValueSql,
+        string? DateSql,
+        string? HourSql,
+        string FromParam,
+        string ToParam);
 
     private Source Resolve(ColumnNode node, AlignmentMode mode, int index)
     {
-        var ep = catalog.GetByTable(node.Table)
-                 ?? catalog.Get(node.Table)
-                 ?? throw new FormulaException(
-                     $"'{node.Table}' adında bir tablo/servis yok. Katalogdaki tablo adını kullanın.");
+        var ep = catalog.GetByTable(node.Table) ?? catalog.Get(node.Table);
+        if (ep is null)
+        {
+            var ext = external?.Sources.FirstOrDefault(x =>
+                x.Name.Equals(node.Table, StringComparison.OrdinalIgnoreCase));
+            if (ext is not null) return ResolveExternal(ext, node, mode, index);
+
+            throw new FormulaException(
+                $"'{node.Table}' adında bir tablo/servis yok. Katalogdaki tablo adını kullanın.");
+        }
 
         if (ep.IsExport || ep.Fields.Count == 0)
             throw new FormulaException($"'{node.Table}' bir veri tablosu değil (export servisi).");
@@ -104,53 +126,123 @@ public sealed class FormulaCompiler(EndpointCatalog catalog, DynamicTableStore s
             throw new FormulaException(
                 $"'{node.Table}.{node.Column}' sayısal değil. Sayısal olmayan kolonlarda yalnızca COUNT kullanılabilir.");
 
+        var schema = SqlIdentifier.Sanitize(store.DataSchema);
+        var dateColumn = mode == AlignmentMode.None ? null : ep.DateField?.ColumnName;
         var hourColumn = mode == AlignmentMode.DateHour ? ep.HourField?.ColumnName : null;
 
         return new Source(
             Alias: "s" + index,
-            Endpoint: ep,
-            Field: field,
+            Name: ep.TableName,
+            ColumnName: field.ColumnName,
             Aggregate: node.Aggregate,
-            DateColumn: mode == AlignmentMode.None ? null : ep.DateField?.ColumnName,
-            HourColumn: hourColumn);
+            FromSql: SqlIdentifier.QualifiedTable(schema, SqlIdentifier.Sanitize(ep.TableName)),
+            ValueSql: SqlIdentifier.Quote(field.ColumnName),
+            DateSql: dateColumn is null ? null : SqlIdentifier.Quote(dateColumn),
+            HourSql: hourColumn is null ? null : HourKey(SqlIdentifier.Quote(hourColumn)),
+            FromParam: "@from",
+            ToParam: "@to");
     }
 
-    /// <summary>Her kaynak için bir CTE, ardından ortak hizalama ekseni CTE'si üretir.</summary>
-    private string BuildCtes(List<Source> sources, AlignmentMode mode)
+    /// <summary>
+    /// Harici (OSOS) tablo: kolonlar metindir, satırlar kullanıcıya aittir ve aynı
+    /// dönem yeniden sorgulanmış olabilir. Alt sorgu yalnızca çalıştıran kullanıcının,
+    /// her zaman damgası için en son sorgusundan gelen satırlarını bırakır.
+    /// </summary>
+    private static Source ResolveExternal(ExternalFormulaSource ext, ColumnNode node, AlignmentMode mode, int index)
     {
-        var schema = SqlIdentifier.Sanitize(store.DataSchema);
+        var field = ext.Fields.FirstOrDefault(f => f.Column.Equals(node.Column, StringComparison.OrdinalIgnoreCase))
+                    ?? throw new FormulaException(
+                        $"'{ext.Title}' kaynağında '{node.Column}' alanı yok. " +
+                        $"Mevcut alanlar: {string.Join(", ", ext.Fields.Select(f => f.Column).Take(20))}");
+
+        var q = SqlIdentifier.Quote;
+        var ts = ext.TimestampColumn is null ? null : q(ext.TimestampColumn);
+
+        var inner = new StringBuilder("SELECT x.*");
+        if (ext.VersionColumn is not null)
+        {
+            var partition = ext.VersionPartitionColumns.Select(c => "x." + q(c)).ToList();
+            if (ts is not null) partition.Add("x." + ts);
+            var over = partition.Count == 0 ? "" : "PARTITION BY " + string.Join(", ", partition);
+            inner.Append($", MAX(x.{q(ext.VersionColumn)}) OVER ({over}) AS [__latest]");
+        }
+        inner.Append($" FROM {SqlIdentifier.QualifiedTable(ext.Schema, ext.Table)} x");
+        if (ext.OwnerColumn is not null) inner.Append($" WHERE x.{q(ext.OwnerColumn)} = @appUserId");
+
+        var from = new StringBuilder("(SELECT o.*");
+        if (ts is not null) from.Append($", {ParseTimestamp("o." + ts)} AS {q(TimestampAlias)}");
+        from.Append($" FROM ({inner}) o");
+        if (ext.VersionColumn is not null) from.Append($" WHERE o.{q(ext.VersionColumn)} = o.[__latest]");
+        from.Append(')');
+
+        var hasDate = ts is not null && mode != AlignmentMode.None;
+        var tsAlias = q(TimestampAlias);
+
+        return new Source(
+            Alias: "s" + index,
+            Name: ext.Name,
+            ColumnName: field.Column,
+            Aggregate: node.Aggregate,
+            FromSql: from.ToString(),
+            ValueSql: $"TRY_CAST(TRY_CAST({q(field.Column)} AS FLOAT) AS {Numeric})",
+            DateSql: hasDate ? tsAlias : null,
+            // Saat altı veri (ör. 15 dk profil) saat dilimine toplanır: "13:00".
+            HourSql: hasDate && ext.HasHour && mode == AlignmentMode.DateHour
+                ? $"RIGHT(N'0' + CAST(DATEPART(hour, {tsAlias}) AS NVARCHAR(2)), 2) + N':00'"
+                : null,
+            // Zaman damgası yerel saattir; parametrenin saat dilimi atılarak karşılaştırılır.
+            FromParam: "CAST(@from AS DATETIME2(7))",
+            ToParam: "CAST(@to AS DATETIME2(7))");
+    }
+
+    /// <summary>OSOS/Open-Meteo metin zaman damgası → DATETIME2 (yerel saat).</summary>
+    private static string ParseTimestamp(string column) =>
+        $"COALESCE(CAST(TRY_CAST({column} AS DATETIMEOFFSET) AS DATETIME2(7)), " +
+        $"TRY_CAST(REPLACE({column}, N'T', N' ') AS DATETIME2(7)), " +
+        $"TRY_CONVERT(DATETIME2(7), {column}, 104), TRY_CONVERT(DATETIME2(7), {column}, 103))";
+
+    /// <summary>
+    /// Saat anahtarını "SS:dd" biçimine indirger. EPİAŞ'ta saat alanı kimi servislerde
+    /// "13:00", kimilerinde tam tarih-saat metnidir; hizalama bu ortak biçim üzerinden yapılır.
+    /// </summary>
+    private static string HourKey(string column) =>
+        $"COALESCE(CONVERT(NVARCHAR(5), CAST(TRY_CAST(CAST({column} AS NVARCHAR(40)) AS DATETIMEOFFSET) AS TIME), 108), " +
+        $"LEFT(CAST({column} AS NVARCHAR(40)), 5))";
+
+    /// <summary>Her kaynak için bir CTE, ardından ortak hizalama ekseni CTE'si üretir.</summary>
+    private static string BuildCtes(List<Source> sources, AlignmentMode mode)
+    {
         var parts = new List<string>();
 
         foreach (var s in sources)
         {
-            var table = SqlIdentifier.QualifiedTable(schema, SqlIdentifier.Sanitize(s.Endpoint.TableName));
             var select = new List<string>();
             var group = new List<string>();
 
-            if (s.DateColumn is not null)
+            if (s.DateSql is not null)
             {
-                select.Add($"CAST({SqlIdentifier.Quote(s.DateColumn)} AS date) AS d");
-                group.Add($"CAST({SqlIdentifier.Quote(s.DateColumn)} AS date)");
+                select.Add($"CAST({s.DateSql} AS date) AS d");
+                group.Add($"CAST({s.DateSql} AS date)");
             }
 
-            if (s.HourColumn is not null)
+            if (s.HourSql is not null)
             {
-                select.Add($"CAST({SqlIdentifier.Quote(s.HourColumn)} AS NVARCHAR(20)) AS h");
-                group.Add($"CAST({SqlIdentifier.Quote(s.HourColumn)} AS NVARCHAR(20))");
+                select.Add($"{s.HourSql} AS h");
+                group.Add(s.HourSql);
             }
 
             select.Add(s.Aggregate == "COUNT"
-                ? $"CAST(COUNT_BIG({SqlIdentifier.Quote(s.Field.ColumnName)}) AS {Numeric}) AS v"
-                : $"{SqlAggregate(s.Aggregate)}(CAST({SqlIdentifier.Quote(s.Field.ColumnName)} AS {Numeric})) AS v");
+                ? $"CAST(COUNT_BIG({s.ValueSql}) AS {Numeric}) AS v"
+                : $"{SqlAggregate(s.Aggregate)}(CAST({s.ValueSql} AS {Numeric})) AS v");
 
             var sb = new StringBuilder();
             sb.AppendLine($"  {s.Alias}_src AS (");
             sb.AppendLine($"    SELECT {string.Join(", ", select)}");
-            sb.AppendLine($"    FROM {table}");
-            if (s.DateColumn is not null)
+            sb.AppendLine($"    FROM {s.FromSql} t");
+            if (s.DateSql is not null)
                 sb.AppendLine(
-                    $"    WHERE (@from IS NULL OR {SqlIdentifier.Quote(s.DateColumn)} >= @from)" +
-                    $" AND (@to IS NULL OR {SqlIdentifier.Quote(s.DateColumn)} <= @to)");
+                    $"    WHERE (@from IS NULL OR {s.DateSql} >= {s.FromParam})" +
+                    $" AND (@to IS NULL OR {s.DateSql} <= {s.ToParam})");
             if (group.Count > 0)
                 sb.AppendLine($"    GROUP BY {string.Join(", ", group)}");
             sb.Append("  )");
@@ -159,8 +251,8 @@ public sealed class FormulaCompiler(EndpointCatalog catalog, DynamicTableStore s
 
         if (NeedsAxis(sources, mode))
         {
-            var hourSources = sources.Where(s => s.HourColumn is not null).ToList();
-            var dateSources = sources.Where(s => s.DateColumn is not null).ToList();
+            var hourSources = sources.Where(s => s.HourSql is not null).ToList();
+            var dateSources = sources.Where(s => s.DateSql is not null).ToList();
 
             var sb = new StringBuilder();
             sb.AppendLine("  axis AS (");
@@ -193,7 +285,7 @@ public sealed class FormulaCompiler(EndpointCatalog catalog, DynamicTableStore s
         AlignmentMode mode)
     {
         var expr = ToSql(ast, sourceIndex, sources);
-        var axisHasHour = mode == AlignmentMode.DateHour && sources.Any(s => s.HourColumn is not null);
+        var axisHasHour = mode == AlignmentMode.DateHour && sources.Any(s => s.HourSql is not null);
 
         var sb = new StringBuilder();
         sb.AppendLine("SELECT q.[date], q.[hour], q.[value]");
@@ -206,8 +298,8 @@ public sealed class FormulaCompiler(EndpointCatalog catalog, DynamicTableStore s
             foreach (var s in sources)
             {
                 var on = new List<string>();
-                if (s.DateColumn is not null) on.Add($"{s.Alias}.d = k.d");
-                if (s.HourColumn is not null && axisHasHour) on.Add($"{s.Alias}.h = k.h");
+                if (s.DateSql is not null) on.Add($"{s.Alias}.d = k.d");
+                if (s.HourSql is not null && axisHasHour) on.Add($"{s.Alias}.h = k.h");
 
                 sb.AppendLine(on.Count == 0
                     ? $"  CROSS JOIN {s.Alias}_src {s.Alias}"
@@ -231,7 +323,7 @@ public sealed class FormulaCompiler(EndpointCatalog catalog, DynamicTableStore s
     }
 
     private static bool NeedsAxis(List<Source> sources, AlignmentMode mode) =>
-        mode != AlignmentMode.None && sources.Any(s => s.DateColumn is not null);
+        mode != AlignmentMode.None && sources.Any(s => s.DateSql is not null);
 
     private static string SqlAggregate(string aggregate) => aggregate.ToUpperInvariant() switch
     {
