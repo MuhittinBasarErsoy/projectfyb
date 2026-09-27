@@ -1,0 +1,15 @@
+{
+  "name": "fyblue-web",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @fyblue/tailadmin -w @fyblue/shadcn -w @fyblue/starter",
+    "dev:tailadmin": "npm run dev -w @fyblue/tailadmin",
+    "dev:shadcn": "npm run dev -w @fyblue/shadcn",
+    "dev:starter": "npm run dev -w @fyblue/starter",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  }
+}

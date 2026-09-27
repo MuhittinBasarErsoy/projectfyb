@@ -32,7 +32,7 @@ publish/
 # NuGet
 *.nupkg
 *.snupkg
-packages/
+/packages/
 .nuget/
 
 # Test / kapsama
@@ -52,3 +52,14 @@ Thumbs.db
 # Data Protection anahtarları (yerel geliştirme)
 .keys/
 .env
+
+# Web arayüzleri (web/): bağımlılıklar ve derleme çıktıları
+node_modules/
+web/apps/*/dist/
+web/apps/starter/.next/
+web/apps/starter/out/
+*.tsbuildinfo
+# Şablonların derlenmiş hâli sunucuya kopyalanır; kaynağı web/ altındadır.
+src/FyBlue.Server/wwwroot/tailadmin/
+src/FyBlue.Server/wwwroot/shadcn/
+src/FyBlue.Server/wwwroot/starter/
