@@ -230,8 +230,15 @@ if (app.Environment.IsDevelopment() || builder.Configuration.GetValue("ExposeApi
 }
 
 // Blazor WASM istemcisini aynı sunucudan sun (tek uygulama, tek origin).
+// Dosya adları parmak izi taşımadığı için (WasmFingerprintAssets=false) tarayıcı her
+// açılışta ETag ile yeniden doğrulasın; yoksa güncellemeden sonra eski app.css/js kalır.
+// index.html'deki ?v= parametresi, bu başlık gelmeden önce önbelleğe alınmış kopyaları aşar.
+var staticFiles = new StaticFileOptions
+{
+    OnPrepareResponse = ctx => ctx.Context.Response.Headers.CacheControl = "no-cache"
+};
 app.UseBlazorFrameworkFiles();
-app.UseStaticFiles();
+app.UseStaticFiles(staticFiles);
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -248,7 +255,7 @@ app.MapControllers();
 app.MapHealthChecks("/health");
 
 // API dışındaki tüm yollar Blazor index.html'e düşer (SPA yönlendirmesi).
-app.MapFallbackToFile("index.html");
+app.MapFallbackToFile("index.html", staticFiles);
 
 app.Run();
 
