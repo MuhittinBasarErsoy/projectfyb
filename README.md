@@ -72,6 +72,21 @@ docker compose up -d --build
 http://localhost:8080 — `fyblue-keys` birimi Data Protection anahtarlarını tutar; silinirse
 saklanan OSOS/EPİAŞ şifreleri çözülemez ve hesapların yeniden bağlanması gerekir.
 
+## Arayüz şablonları
+
+Giriş ekranında (ve Profil sayfası / üst çubuktaki şablon düğmesinden) arayüz şablonu seçilir.
+Seçim tarayıcıda saklanır (`localStorage: fyblue.skin`) ve `html[data-skin]` ile ilk boyamadan önce uygulanır.
+
+| Şablon | Kaynak | Öne çıkanlar |
+|---|---|---|
+| `tailadmin` (varsayılan) | [TailAdmin](https://github.com/TailAdmin/free-react-tailwind-admin-dashboard) | Outfit, #465fff marka rengi, geniş beyaz menü, sağda marka panelli giriş |
+| `shadcn` | [shadcndashboard](https://github.com/shadcndashboard/shadcndashboard) (Lyra) | Geist, nötr gri, keskin köşeler, çerçeveli yan menü, ortalanmış giriş kartı |
+| `starter` | [next-shadcn-dashboard-starter](https://github.com/kiranism/next-shadcn-dashboard-starter) (Vercel teması) | Geist, siyah-beyaz, breadcrumb'lı üst çubuk, menü altında kullanıcı |
+| `classic` | FyBlue | İlk tasarım |
+
+Şablonlar yalnızca görünümü değiştirir (token'lar + kabuk düzeni, `wwwroot/css/skins.css`); tüm sayfalar
+ve bileşenler ortaktır. Hepsi açık/koyu temayı destekler.
+
 ## Yapılandırma
 
 | Anahtar | Açıklama |

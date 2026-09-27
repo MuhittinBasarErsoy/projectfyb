@@ -1,0 +1,37 @@
+@* Arayüz şablonu seçici. Seçim anında uygulanır, böylece giriş ekranı da önizleme olur. *@
+@implements IDisposable
+@inject SkinState Skins
+
+<div class="skin-picker @(Compact ? "skin-picker-compact" : "")" role="radiogroup" aria-label="Arayüz şablonu">
+    @foreach (var skin in SkinState.All)
+    {
+        var active = skin.Id == Skins.Current;
+        <button type="button" class="skin-option @(active ? "is-active" : "")" role="radio" aria-label="@skin.Name" aria-checked="@(active ? "true" : "false")"
+                title="@skin.Description" @onclick="() => Skins.SetAsync(skin.Id)">
+            <span class="skin-preview skin-prev-@skin.Id" aria-hidden="true">
+                <span class="sp-side"><i></i><i></i><i></i><i></i></span>
+                <span class="sp-main">
+                    <span class="sp-top"></span>
+                    <span class="sp-cards"><i></i><i></i><i></i></span>
+                    <span class="sp-panel"></span>
+                </span>
+            </span>
+            <span class="skin-text">
+                <strong>@skin.Name</strong>
+                @if (!Compact) { <small>@skin.Origin</small> }
+            </span>
+            @if (active) { <span class="skin-check"><Icon Name="check" Size="12" Stroke="3" /></span> }
+        </button>
+    }
+</div>
+
+@code {
+    /// <summary>Menü içinde kullanılan küçük görünüm (açıklamalar gizli).</summary>
+    [Parameter] public bool Compact { get; set; }
+
+    protected override void OnInitialized() => Skins.Changed += OnChanged;
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Skins.Changed -= OnChanged;
+}

@@ -24,6 +24,7 @@ builder.Services.AddScoped(_ => new HttpClient
 });
 builder.Services.AddScoped<TokenStore>();
 builder.Services.AddScoped<AuthState>();
+builder.Services.AddScoped<SkinState>();
 builder.Services.AddScoped<ApiHttp>();
 builder.Services.AddScoped<AuthApi>();
 builder.Services.AddScoped<ConnectionsState>();
@@ -32,4 +33,5 @@ builder.Services.AddScoped<EpiasApiClient>();
 
 var host = builder.Build();
 await host.Services.GetRequiredService<AuthState>().InitializeAsync();
+await host.Services.GetRequiredService<SkinState>().InitializeAsync();
 await host.RunAsync();

@@ -26,6 +26,19 @@ window.fyblue = (function () {
             return next === 'dark';
         },
 
+        getSkin: function () {
+            return document.documentElement.getAttribute('data-skin') || safeGet('fyblue.skin');
+        },
+
+        setSkin: function (skin) {
+            document.documentElement.setAttribute('data-skin', skin);
+            safeSet('fyblue.skin', skin);
+        },
+
+        closeDetails: function (el) {
+            if (el) el.removeAttribute('open');
+        },
+
         getFlag: function (name) {
             return safeGet('fyblue.' + name) === '1';
         },
@@ -52,6 +65,13 @@ window.fyblue = (function () {
         }
     };
 })();
+
+// Açık açılır menüler (details.skin-menu) dışarı tıklanınca kapanır.
+document.addEventListener('click', function (e) {
+    document.querySelectorAll('details.skin-menu[open]').forEach(function (d) {
+        if (!d.contains(e.target)) d.removeAttribute('open');
+    });
+});
 
 // Firefox, dataTransfer'a veri yazılmadan sürüklemeyi başlatmaz; Blazor bunu
 // yapamadığı için sürüklenebilir her öğeye boş bir veri eklenir.
