@@ -6,3 +6,9 @@ obj/
 .env
 *.md
 tests/
+**/node_modules/
+web/apps/starter/.next/
+web/apps/starter/out/
+src/FyBlue.Server/wwwroot/tailadmin/
+src/FyBlue.Server/wwwroot/shadcn/
+src/FyBlue.Server/wwwroot/starter/

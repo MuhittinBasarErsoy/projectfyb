@@ -1,7 +1,6 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/FyBlue.Server/FyBlue.Server.csproj" />
-    <Project Path="src/FyBlue.Web/FyBlue.Web.csproj" />
     <Project Path="src/FyBlue.Contracts/FyBlue.Contracts.csproj" />
     <Project Path="src/Osos.Core/Osos.Core.csproj" />
     <Project Path="src/Osos.Contracts/Osos.Contracts.csproj" />

@@ -229,16 +229,30 @@ if (app.Environment.IsDevelopment() || builder.Configuration.GetValue("ExposeApi
     app.MapScalarApiReference(o => o.WithTitle("FyBlue API"));
 }
 
-// Blazor WASM istemcisini aynı sunucudan sun (tek uygulama, tek origin).
-// Dosya adları parmak izi taşımadığı için (WasmFingerprintAssets=false) tarayıcı her
-// açılışta ETag ile yeniden doğrulasın; yoksa güncellemeden sonra eski app.css/js kalır.
-// index.html'deki ?v= parametresi, bu başlık gelmeden önce önbelleğe alınmış kopyaları aşar.
+// Arayüz şablonları (web/ altındaki React uygulamaları) aynı sunucudan sunulur: tek origin,
+// tek oturum. Her şablon kendi yolundadır: /tailadmin/, /shadcn/, /starter/.
+// Derleyicinin ürettiği dosyalar (assets/, _next/static/) içerik parmak izi taşır ve kalıcı
+// önbelleklenir; index.html ve diğer dosyalar her açılışta ETag ile doğrulanır.
+// Şablonlar sunucudan bağımsız derlendiği için wwwroot doğrudan diskten okunur
+// (geliştirmedeki statik varlık listesi derleme anındaki dosyaları bilir, sonrakileri görmez).
+var webRoot = Path.Combine(app.Environment.ContentRootPath, "wwwroot");
+Directory.CreateDirectory(webRoot);
+var webFiles = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(webRoot);
 var staticFiles = new StaticFileOptions
 {
-    OnPrepareResponse = ctx => ctx.Context.Response.Headers.CacheControl = "no-cache"
+    FileProvider = webFiles,
+    OnPrepareResponse = ctx =>
+    {
+        var path = ctx.Context.Request.Path.Value ?? "";
+        var hashed = path.Contains("/assets/", StringComparison.Ordinal) || path.Contains("/_next/static/", StringComparison.Ordinal);
+        ctx.Context.Response.Headers.CacheControl = hashed ? "public, max-age=31536000, immutable" : "no-cache";
+    }
 };
-app.UseBlazorFrameworkFiles();
+app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = webFiles });   // /starter/osos/query/ → .../index.html (Next.js)
 app.UseStaticFiles(staticFiles);
+// Yönlendirme statik dosyalardan sonra: yoksa şablonların yedek uç noktası (MapFallbackToFile)
+// .js/.css isteklerini de yakalayıp index.html döndürür.
+app.UseRouting();
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -254,8 +268,13 @@ app.UseHangfireDashboard("/hangfire", new DashboardOptions
 app.MapControllers();
 app.MapHealthChecks("/health");
 
-// API dışındaki tüm yollar Blazor index.html'e düşer (SPA yönlendirmesi).
-app.MapFallbackToFile("index.html", staticFiles);
+// Şablon içi SPA yönlendirmesi: dosyası olmayan yollar şablonun index.html'ine düşer.
+app.MapFallbackToFile("/tailadmin/{**path}", "tailadmin/index.html", staticFiles);
+app.MapFallbackToFile("/shadcn/{**path}", "shadcn/index.html", staticFiles);
+app.MapFallbackToFile("/starter/{**path}", "starter/404.html", staticFiles);
+
+// Diğer her yol (kök, eski Blazor adresleri) seçili şablona yönlendirilir.
+app.MapFallback(TemplateRouting.Redirect);
 
 app.Run();
 

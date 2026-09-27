@@ -25,17 +25,17 @@ yanlış bir dış hesap şifresi kullanıcıyı uygulamadan atmaz.
 
 ```
 FyBlue.slnx
-├─ src/FyBlue.Server      ASP.NET Core 10: tüm API + Blazor WASM'i barındırır (tek süreç, tek origin)
+├─ src/FyBlue.Server      ASP.NET Core 10: tüm API + arayüz şablonlarını barındırır (tek süreç, tek origin)
 │   ├─ Controllers/            auth, osos, searches, jobs, weather
 │   ├─ Controllers/Epias/      epias (hesap), catalog, sync, data, formulas  →  /api/epias/...
 │   ├─ Data/                   Identity + OSOS + dış hesap bağlantıları (dbo)
 │   └─ Security/               EPİAŞ bilet erişimi (kullanıcının bağlı hesabından)
-├─ src/FyBlue.Web         Blazor WebAssembly arayüz (tek tasarım sistemi, açık/koyu tema)
 ├─ src/FyBlue.Contracts   Ortak auth / hesap bağlama DTO'ları
 ├─ src/Osos.Core          OSOS istemcisi + CryptoJS uyumlu AES
 ├─ src/Osos.Contracts     OSOS DTO'ları
 ├─ src/Epias.Core         Katalog, CAS bilet servisi, dinamik tablolar, formül motoru, EpiasDbContext (app şeması)
 ├─ src/Epias.Contracts    EPİAŞ DTO'ları
+├─ web/                   Arayüz şablonları (npm workspaces) — aşağıya bakın
 ├─ tests/                 Osos.Core.Tests (kripto), Epias.Core.Tests (katalog, formül, depolama)
 └─ specs/electricity-swagger.json
 ```
@@ -46,21 +46,60 @@ Veritabanı `FyBlue` içinde iki EF bağlamı yan yana durur:
 `formula.*` şemalarındadır. Hangfire kendi `HangFire` şemasını oluşturur. Migration'lar ve
 163 endpoint tablosu açılışta otomatik uygulanır.
 
+## Arayüz şablonları
+
+Arayüz, müşterinin seçtiği üç hazır şablonun **kendisiyle** yazılmıştır. Kullanıcı şablonu giriş
+ekranında seçer; sonradan Profil sayfasından veya kullanıcı menüsünden değiştirebilir. Oturum ortaktır
+(aynı JWT, aynı origin): şablon değiştirmek çıkış yaptırmaz ve aynı sayfa yeni şablonda açılır.
+
+| Şablon | Kaynak | Yol | Teknoloji |
+|---|---|---|---|
+| TailAdmin (varsayılan) | [free-react-tailwind-admin-dashboard](https://github.com/TailAdmin/free-react-tailwind-admin-dashboard) | `/tailadmin/` | Vite + React Router |
+| Shadcn Dashboard | [shadcndashboard](https://github.com/shadcndashboard/shadcndashboard) | `/shadcn/` | Vite + React Router + shadcn/ui |
+| Next Shadcn Starter | [next-shadcn-dashboard-starter](https://github.com/kiranism/next-shadcn-dashboard-starter) | `/starter/` | Next.js (statik yayın) + shadcn/ui |
+
+```
+web/
+├─ packages/core      Ortak mantık: API istemcisi, oturum, hesap bağlantıları, sayfa hook'ları,
+│                     sürükle-bırak formül modeli, Türkçe etiketler ve menü tanımı
+├─ apps/tailadmin     TailAdmin şablonu + FyBlue sayfaları
+├─ apps/shadcn        Shadcn Dashboard şablonu + FyBlue sayfaları
+└─ apps/starter       Next.js Shadcn Dashboard Starter + FyBlue sayfaları
+```
+
+Yeni bir özellik eklerken mantık `packages/core`'a, görünüm her şablonun kendi bileşenleriyle üç
+uygulamaya eklenir. Şablonların örnek (demo) sayfaları çıkarılmıştır. Next.js şablonu Node.js sunucusu
+gerektirmez: `output: "export"` ile statik dosya olarak derlenir; Clerk, Sentry ve sunucu tarafı özellikleri
+kaldırılmış, giriş FyBlue hesabıyla yapılır.
+
+Sunucu kök adresi (`/`) seçili şablona yönlendirir (çerez `fyblue_template`); eski `/login`, `/register`
+adresleri de şablondaki karşılıklarına gider. Derleme çıktıları `src/FyBlue.Server/wwwroot/<şablon>/`
+klasörüne yazılır (git'e girmez).
+
 ## Çalıştırma
 
-Gereksinimler: .NET 10 SDK, Docker Desktop (veya erişilebilir bir SQL Server).
+Gereksinimler: .NET 10 SDK, Node.js 22+, Docker Desktop (veya erişilebilir bir SQL Server).
 
 ### Geliştirme
 
 ```bash
 docker compose up -d mssql
+cd web && npm install && npm run build && cd ..     # üç şablonu derler
 dotnet run --project src/FyBlue.Server --launch-profile http
+```
+
+Şablon üzerinde çalışırken anlık yenileme için sunucu açıkken ayrıca (API'yi 5151'e yönlendirirler):
+
+```bash
+cd web && npm run dev:tailadmin    # http://localhost:5173/tailadmin/
+cd web && npm run dev:shadcn       # http://localhost:5174/shadcn/
+cd web && npm run dev:starter      # http://localhost:5175/starter/
 ```
 
 Tarayıcı: http://localhost:5151 → **Kayıt ol** → **Bağlı Hesaplar**'dan OSOS ve/veya EPİAŞ hesabını bağla.
 API dokümanı (Development): http://localhost:5151/scalar/v1
 
-Visual Studio'da başlangıç projesi yalnızca **FyBlue.Server**'dır (web arayüzünü kendisi sunar).
+Visual Studio'da başlangıç projesi yalnızca **FyBlue.Server**'dır (derlenmiş şablonları kendisi sunar).
 
 ### Docker ile tamamı
 
@@ -71,21 +110,6 @@ docker compose up -d --build
 
 http://localhost:8080 — `fyblue-keys` birimi Data Protection anahtarlarını tutar; silinirse
 saklanan OSOS/EPİAŞ şifreleri çözülemez ve hesapların yeniden bağlanması gerekir.
-
-## Arayüz şablonları
-
-Giriş ekranında (ve Profil sayfası / üst çubuktaki şablon düğmesinden) arayüz şablonu seçilir.
-Seçim tarayıcıda saklanır (`localStorage: fyblue.skin`) ve `html[data-skin]` ile ilk boyamadan önce uygulanır.
-
-| Şablon | Kaynak | Öne çıkanlar |
-|---|---|---|
-| `tailadmin` (varsayılan) | [TailAdmin](https://github.com/TailAdmin/free-react-tailwind-admin-dashboard) | Outfit, #465fff marka rengi, geniş beyaz menü, sağda marka panelli giriş |
-| `shadcn` | [shadcndashboard](https://github.com/shadcndashboard/shadcndashboard) (Lyra) | Geist, nötr gri, keskin köşeler, çerçeveli yan menü, ortalanmış giriş kartı |
-| `starter` | [next-shadcn-dashboard-starter](https://github.com/kiranism/next-shadcn-dashboard-starter) (Vercel teması) | Geist, siyah-beyaz, breadcrumb'lı üst çubuk, menü altında kullanıcı |
-| `classic` | FyBlue | İlk tasarım |
-
-Şablonlar yalnızca görünümü değiştirir (token'lar + kabuk düzeni, `wwwroot/css/skins.css`); tüm sayfalar
-ve bileşenler ortaktır. Hepsi açık/koyu temayı destekler.
 
 ## Yapılandırma
 

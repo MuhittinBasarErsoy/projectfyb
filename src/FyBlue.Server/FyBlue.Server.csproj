@@ -6,15 +6,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <InvariantGlobalization>false</InvariantGlobalization>
     <UserSecretsId>fyblue-server</UserSecretsId>
-    <!-- Statik varlık içerik-fingerprint'ini kapat (scoped CSS vb. düz adlarla sunulsun). -->
-    <StaticWebAssetsFingerprintContent>false</StaticWebAssetsFingerprintContent>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Hangfire.AspNetCore" Version="1.8.25" />
     <PackageReference Include="Hangfire.SqlServer" Version="1.8.25" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.12" />
-    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.12" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.12" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12">
@@ -33,7 +30,6 @@
     <ProjectReference Include="..\Osos.Core\Osos.Core.csproj" />
     <ProjectReference Include="..\Osos.Contracts\Osos.Contracts.csproj" />
     <ProjectReference Include="..\Epias.Core\Epias.Core.csproj" />
-    <ProjectReference Include="..\FyBlue.Web\FyBlue.Web.csproj" />
   </ItemGroup>
 
   <ItemGroup>
