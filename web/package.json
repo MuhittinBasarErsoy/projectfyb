@@ -11,5 +11,9 @@
     "dev:shadcn": "npm run dev -w @fyblue/shadcn",
     "dev:starter": "npm run dev -w @fyblue/starter",
     "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "overrides": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0"
   }
 }

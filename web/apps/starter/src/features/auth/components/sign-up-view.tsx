@@ -1,65 +1,72 @@
-import { buttonVariants } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
-import { SignUp as ClerkSignUpForm } from '@clerk/nextjs';
-import { Metadata } from 'next';
-import Link from 'next/link';
-import { InteractiveGridPattern } from './interactive-grid';
+'use client';
 
-export const metadata: Metadata = {
-  title: 'Authentication',
-  description: 'Authentication forms built using the components.'
-};
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Spinner } from '@/components/ui/spinner';
+import { TemplatePicker } from '@/components/fyblue/shell';
+import { Notice } from '@/components/fyblue/ui';
+import { PASSWORD_HINT, useAuth, useRegisterForm } from '@fyblue/core';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useEffect, type ReactNode } from 'react';
+import { AuthShell } from './sign-in-view';
+
+function Row({ id, label, hint, children }: { id?: string; label: string; hint?: string; children: ReactNode }) {
+  return (
+    <div className='grid gap-2'>
+      <Label htmlFor={id}>{label}</Label>
+      {children}
+      {hint && <p className='text-muted-foreground text-xs'>{hint}</p>}
+    </div>
+  );
+}
 
 export default function SignUpViewPage() {
+  const router = useRouter();
+  const { isAuthenticated } = useAuth();
+  // Yeni kullanıcının ilk işi dış hesapları bağlamak.
+  const form = useRegisterForm(() => router.replace('/settings/connections/?welcome=1'));
+
+  useEffect(() => {
+    if (isAuthenticated && !form.busy) router.replace('/');
+  }, [isAuthenticated, form.busy, router]);
+
   return (
-    <div className='relative h-screen flex-col items-center justify-center md:grid lg:max-w-none lg:grid-cols-2 lg:px-0'>
-      <Link
-        href='/examples/authentication'
-        className={cn(
-          buttonVariants({ variant: 'ghost' }),
-          'absolute top-4 right-4 hidden md:top-8 md:right-8'
-        )}
-      >
-        Sign Up
-      </Link>
-      <div className='relative hidden h-full flex-col p-10 lg:flex dark:border-r'>
-        <div className='absolute inset-0 bg-sidebar' />
-        <div className='text-sidebar-foreground relative z-20 flex items-center text-lg font-medium'>
-          <svg
-            xmlns='http://www.w3.org/2000/svg'
-            viewBox='0 0 24 24'
-            fill='none'
-            stroke='currentColor'
-            strokeWidth='2'
-            strokeLinecap='round'
-            strokeLinejoin='round'
-            className='mr-2 h-6 w-6'
-          >
-            <path d='M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3' />
-          </svg>
-          Logo
-        </div>
-        <InteractiveGridPattern
-          className={cn(
-            'mask-[radial-gradient(400px_circle_at_center,white,transparent)]',
-            'inset-x-0 inset-y-[0%] h-full skew-y-12'
-          )}
-        />
-        <div className='text-sidebar-foreground relative z-20 mt-auto'>
-          <blockquote className='space-y-2'>
-            <p className='text-lg'>
-              &ldquo;This starter template has saved me countless hours of work and helped me
-              deliver projects to my clients faster than ever before.&rdquo;
-            </p>
-            <footer className='text-sidebar-foreground/70 text-sm'>Random Dude</footer>
-          </blockquote>
-        </div>
+    <AuthShell>
+      <title>Kayıt · FyBlue</title>
+      <div className='flex flex-col space-y-2 text-center'>
+        <h1 className='text-2xl font-semibold tracking-tight'>Hesap oluşturun</h1>
+        <p className='text-muted-foreground text-sm'>Tek hesap; OSOS ve EPİAŞ bağlantılarınızı sonra eklersiniz.</p>
       </div>
-      <div className='flex h-full items-center justify-center p-4 lg:p-8'>
-        <div className='flex w-full max-w-md flex-col items-center justify-center space-y-6'>
-          <ClerkSignUpForm />
-        </div>
-      </div>
-    </div>
+      <form onSubmit={form.submit} className='grid w-full gap-4'>
+        <Row id='username' label='Kullanıcı adı'>
+          <Input id='username' autoComplete='username' autoFocus value={form.username} onChange={(e) => form.setUsername(e.target.value)} />
+        </Row>
+        <Row id='email' label='E-posta'>
+          <Input id='email' type='email' autoComplete='email' placeholder='ornek@firma.com' value={form.email} onChange={(e) => form.setEmail(e.target.value)} />
+        </Row>
+        <Row id='password' label='Şifre' hint={PASSWORD_HINT}>
+          <Input id='password' type='password' autoComplete='new-password' value={form.password} onChange={(e) => form.setPassword(e.target.value)} />
+        </Row>
+        <Row id='password2' label='Şifre (tekrar)'>
+          <Input id='password2' type='password' autoComplete='new-password' value={form.password2} onChange={(e) => form.setPassword2(e.target.value)} />
+        </Row>
+        <Row label='Arayüz şablonu'>
+          <TemplatePicker path='/signup' />
+        </Row>
+        <Notice kind='error'>{form.error}</Notice>
+        <Button type='submit' disabled={form.busy} className='w-full'>
+          {form.busy && <Spinner />}
+          Kayıt ol
+        </Button>
+      </form>
+      <p className='text-muted-foreground px-8 text-center text-sm'>
+        Zaten hesabınız var mı?{' '}
+        <Link href='/signin/' className='hover:text-primary underline underline-offset-4'>
+          Giriş yapın
+        </Link>
+      </p>
+    </AuthShell>
   );
 }

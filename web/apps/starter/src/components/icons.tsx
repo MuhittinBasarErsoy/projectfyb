@@ -87,11 +87,10 @@ import {
   IconUsers,
   IconVideo,
   IconCrown,
-  IconX
+  IconX,
   IconHistory,
   IconCloud,
   IconGauge,
-  IconStack2,
   IconMathFunction,
   IconPlugConnected,
 } from '@tabler/icons-react';

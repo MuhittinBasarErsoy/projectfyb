@@ -66,7 +66,7 @@ function ModuleCard({
       </CardContent>
       <CardFooter className="flex flex-wrap gap-2 border-t">
         {links.map((l) => (
-          <Link key={l.to} to={l.to} className={buttonVariants({ variant: "outline", size: "sm" })}>
+          <Link key={l.to} href={l.to} className={buttonVariants({ variant: "outline", size: "sm" })}>
             {l.icon}
             {l.label}
           </Link>
