@@ -22,6 +22,7 @@ const BreadcrumbComp = ({ title, subtitle, items = [], module, actions }: BreadC
       <Card
         className={`py-5 px-6 bg-background  overflow-hidden rounded-xl border`}
       >
+        <title>{`${title} · FyBlue`}</title>
         <div className="flex flex-wrap items-start justify-between gap-6 relative">
           <div className="flex flex-col gap-1.5 max-w-3xl">
             <div className="flex items-center gap-2">
