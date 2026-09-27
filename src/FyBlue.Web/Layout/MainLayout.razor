@@ -4,6 +4,7 @@
 @inject ConnectionsState Connections
 @inject NavigationManager Nav
 @inject IJSRuntime JS
+@inject SkinState Skins
 
 @if (Auth.IsAuthenticated)
 {
@@ -50,6 +51,14 @@
                 </div>
             </nav>
 
+            <a class="sidebar-user" href="settings/profile" title="Profil" @onclick="CloseDrawer">
+                <span class="avatar">@Initial</span>
+                <span class="sidebar-user-text">
+                    <strong>@Auth.Username</strong>
+                    <small>@Skins.CurrentSkin.Name</small>
+                </span>
+            </a>
+
             <button class="sidebar-collapse" @onclick="ToggleCollapsed" aria-label="Menüyü daralt/genişlet">
                 <Icon Name="@(_collapsed ? "chevron-right" : "chevron-left")" Size="16" />
                 <span>Daralt</span>
@@ -61,7 +70,24 @@
         <div class="main">
             <header class="topbar">
                 <button class="icon-btn menu-btn" @onclick="() => _drawerOpen = true" aria-label="Menüyü aç"><Icon Name="menu" /></button>
+                <button class="icon-btn sidebar-trigger" @onclick="ToggleCollapsed" aria-label="Menüyü daralt/genişlet" title="Menüyü daralt/genişlet"><Icon Name="layout" /></button>
+                <span class="topbar-sep" aria-hidden="true"></span>
+                <nav class="crumbs" aria-label="Konum">
+                    @{ var crumbs = Crumbs(); }
+                    @for (var i = 0; i < crumbs.Count; i++)
+                    {
+                        if (i > 0) { <Icon Name="chevron-right" Size="14" Class="crumb-sep" /> }
+                        <span class="crumb @(i == crumbs.Count - 1 ? "is-current" : "")">@crumbs[i]</span>
+                    }
+                </nav>
                 <span class="topbar-spacer"></span>
+                <details class="skin-menu" @ref="_skinMenu">
+                    <summary class="icon-btn" aria-label="Arayüz şablonu" title="Arayüz şablonu"><Icon Name="layout" /></summary>
+                    <div class="skin-menu-pop">
+                        <span class="section-title">Arayüz şablonu</span>
+                        <SkinPicker Compact />
+                    </div>
+                </details>
                 <button class="icon-btn" @onclick="ToggleTheme" aria-label="Tema değiştir" title="Açık/koyu tema">
                     <Icon Name="@(_dark ? "sun" : "moon")" />
                 </button>
@@ -83,6 +109,33 @@
     private bool _collapsed;
     private bool _drawerOpen;
     private bool _dark;
+    private ElementReference _skinMenu;
+
+    private static readonly Dictionary<string, string> Sections = new()
+    {
+        ["osos"] = "OSOS", ["epias"] = "EPİAŞ", ["settings"] = "Ayarlar"
+    };
+
+    private static readonly Dictionary<string, string> PageNames = new()
+    {
+        ["osos/query"] = "Sorgu", ["osos/history"] = "Geçmiş", ["osos/jobs"] = "Zamanlanmış İşler",
+        ["osos/weather"] = "Hava Durumu", ["epias"] = "Özet", ["epias/endpoints"] = "Servisler",
+        ["epias/formulas"] = "Formüller", ["settings/connections"] = "Bağlı Hesaplar", ["settings/profile"] = "Profil"
+    };
+
+    /// <summary>Üst çubuktaki konum yolu (ör. EPİAŞ › Servisler › Detay).</summary>
+    private List<string> Crumbs()
+    {
+        var path = Nav.ToBaseRelativePath(Nav.Uri).Split('?', '#')[0].Trim('/');
+        if (path.Length == 0) return ["Genel Bakış"];
+
+        var parts = path.Split('/');
+        var list = new List<string> { Sections.GetValueOrDefault(parts[0], "FyBlue") };
+        var key = parts.Length > 1 ? $"{parts[0]}/{parts[1]}" : parts[0];
+        if (PageNames.TryGetValue(key, out var page)) list.Add(page);
+        if (parts.Length > 2) list.Add("Detay");
+        return list;
+    }
 
     private string Initial => string.IsNullOrEmpty(Auth.Username) ? "?" : Auth.Username[..1].ToUpperInvariant();
 
@@ -90,6 +143,7 @@
     {
         Auth.Changed += OnAuthChanged;
         Connections.Changed += OnConnectionsChanged;
+        Skins.Changed += OnSkinChanged;
 
         if (!Auth.IsAuthenticated)
         {
@@ -133,6 +187,13 @@
 
     private void OnConnectionsChanged() => InvokeAsync(StateHasChanged);
 
+    private void OnSkinChanged() => InvokeAsync(async () =>
+    {
+        StateHasChanged();
+        try { await JS.InvokeVoidAsync("fyblue.closeDetails", _skinMenu); }
+        catch (JSException) { }
+    });
+
     private void CloseDrawer() => _drawerOpen = false;
 
     private async Task ToggleCollapsed()
@@ -154,5 +215,6 @@
     {
         Auth.Changed -= OnAuthChanged;
         Connections.Changed -= OnConnectionsChanged;
+        Skins.Changed -= OnSkinChanged;
     }
 }

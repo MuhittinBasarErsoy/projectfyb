@@ -4,8 +4,26 @@
     {
       "name": "fyblue",
       "runtimeExecutable": "dotnet",
-      "runtimeArgs": ["run", "--project", "src/FyBlue.Server", "--launch-profile", "http"],
+      "runtimeArgs": [
+        "run",
+        "--project",
+        "src/FyBlue.Server",
+        "--launch-profile",
+        "http"
+      ],
       "port": 5151
+    },
+    {
+      "name": "fyblue-web",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": [
+        "run",
+        "--project",
+        "src/FyBlue.Web",
+        "--launch-profile",
+        "http"
+      ],
+      "port": 5152
     }
   ]
 }

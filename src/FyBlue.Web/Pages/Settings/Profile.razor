@@ -37,6 +37,14 @@
             <button class="btn btn-danger-ghost" @onclick="Auth.SignOutAsync"><Icon Name="logout" Size="16" /> Çıkış yap</button>
         </div>
     </section>
+
+    <section class="card grid-span">
+        <div>
+            <h2>Arayüz şablonu</h2>
+            <p class="muted">Seçim bu tarayıcıda saklanır ve anında uygulanır. Giriş ekranından da değiştirebilirsiniz.</p>
+        </div>
+        <SkinPicker />
+    </section>
 </div>
 
 @code {

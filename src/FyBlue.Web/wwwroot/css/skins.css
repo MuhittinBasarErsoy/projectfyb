@@ -1,0 +1,518 @@
+/* ==========================================================================
+   Arayüz şablonları (html[data-skin])
+   app.css'teki token'ları ve kabuk düzenini şablona göre değiştirir.
+   - tailadmin : TailAdmin (free-react-tailwind-admin-dashboard)
+   - shadcn    : Shadcn Dashboard (shadcndashboard, Lyra stili)
+   - starter   : Next Shadcn Dashboard Starter (kiranism, Vercel teması)
+   - classic   : FyBlue'nun ilk tasarımı (bu dosyada kural yok)
+   Koyu tema her şablonda hem sistem tercihiyle hem manuel seçimle çalışır.
+   ========================================================================== */
+
+/* ==========================================================================
+   TailAdmin
+   ========================================================================== */
+
+:root[data-skin="tailadmin"] {
+    --font: "Outfit", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-size: 14.5px;
+
+    --bg: #f9fafb;
+    --surface: #ffffff;
+    --surface-2: #f2f4f7;
+    --surface-3: #e4e7ec;
+    --border: #e4e7ec;
+    --border-strong: #d0d5dd;
+    --text: #1d2939;
+    --text-2: #344054;
+    --muted: #667085;
+
+    --accent: #465fff;
+    --accent-hover: #3641f5;
+    --accent-soft: #ecf3ff;
+    --accent-text: #ffffff;
+    --ring: rgba(70, 95, 255, .14);
+    --nav-active: #465fff;
+    --nav-active-bg: #ecf3ff;
+
+    --ok: #039855;
+    --ok-soft: #ecfdf3;
+    --error: #d92d20;
+    --error-soft: #fef3f2;
+    --warn: #dc6803;
+    --warn-soft: #fffaeb;
+    --info: #0ba5ec;
+    --info-soft: #f0f9ff;
+
+    --sidebar-bg: #ffffff;
+    --sidebar-border: #e4e7ec;
+    --topbar-bg: #ffffff;
+    --brand-bg: #465fff;
+    --brand-shadow: none;
+
+    --shadow-sm: 0 1px 2px rgba(16, 24, 40, .05);
+    --shadow: none;
+    --shadow-lg: 0 12px 16px -4px rgba(16, 24, 40, .08), 0 4px 6px -2px rgba(16, 24, 40, .03);
+
+    --radius: 12px;
+    --radius-lg: 16px;
+    --r-ctl: 8px;
+    --r-xs: 6px;
+    --sidebar-w: 290px;
+    --sidebar-w-collapsed: 90px;
+    --topbar-h: 72px;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root[data-skin="tailadmin"]:not([data-theme="light"]) {
+        --bg: #101828;
+        --surface: #151d2e;
+        --surface-2: #1d2939;
+        --surface-3: #344054;
+        --border: #1d2939;
+        --border-strong: #344054;
+        --text: #e7e9ec;
+        --text-2: #d0d5dd;
+        --muted: #98a2b3;
+        --accent: #465fff;
+        --accent-hover: #3641f5;
+        --accent-soft: rgba(70, 95, 255, .12);
+        --ring: rgba(70, 95, 255, .3);
+        --nav-active: #7592ff;
+        --nav-active-bg: rgba(70, 95, 255, .12);
+        --ok: #32d583;
+        --ok-soft: rgba(18, 183, 106, .15);
+        --error: #f97066;
+        --error-soft: rgba(240, 68, 56, .15);
+        --warn: #fdb022;
+        --warn-soft: rgba(247, 144, 9, .15);
+        --info: #36bffa;
+        --info-soft: rgba(11, 165, 236, .15);
+        --sidebar-bg: #101828;
+        --sidebar-border: #1d2939;
+        --topbar-bg: #101828;
+        --shadow-sm: 0 1px 2px rgba(0, 0, 0, .3);
+        --shadow-lg: 0 16px 48px -12px rgba(0, 0, 0, .7);
+    }
+}
+
+:root[data-skin="tailadmin"][data-theme="dark"] {
+    --bg: #101828;
+    --surface: #151d2e;
+    --surface-2: #1d2939;
+    --surface-3: #344054;
+    --border: #1d2939;
+    --border-strong: #344054;
+    --text: #e7e9ec;
+    --text-2: #d0d5dd;
+    --muted: #98a2b3;
+    --accent: #465fff;
+    --accent-hover: #3641f5;
+    --accent-soft: rgba(70, 95, 255, .12);
+    --ring: rgba(70, 95, 255, .3);
+    --nav-active: #7592ff;
+    --nav-active-bg: rgba(70, 95, 255, .12);
+    --ok: #32d583;
+    --ok-soft: rgba(18, 183, 106, .15);
+    --error: #f97066;
+    --error-soft: rgba(240, 68, 56, .15);
+    --warn: #fdb022;
+    --warn-soft: rgba(247, 144, 9, .15);
+    --info: #36bffa;
+    --info-soft: rgba(11, 165, 236, .15);
+    --sidebar-bg: #101828;
+    --sidebar-border: #1d2939;
+    --topbar-bg: #101828;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, .3);
+    --shadow-lg: 0 16px 48px -12px rgba(0, 0, 0, .7);
+}
+
+[data-skin="tailadmin"] .sidebar { padding: 0 1.25rem 1rem; }
+[data-skin="tailadmin"] .sidebar-brand { padding: 0 .25rem; }
+[data-skin="tailadmin"] .brand { font-size: 1.3rem; font-weight: 600; }
+[data-skin="tailadmin"] .nav-group { margin-top: 1.5rem; gap: .25rem; }
+[data-skin="tailadmin"] .nav-group-title { font-size: .75rem; font-weight: 400; letter-spacing: .02em; color: #98a2b3; padding: 0 .75rem .5rem; }
+[data-skin="tailadmin"] .nav-item { height: 42px; gap: .75rem; font-weight: 500; color: var(--text-2); }
+[data-skin="tailadmin"] .nav-item .icon { color: var(--muted); }
+[data-skin="tailadmin"] .nav-item:hover { background: var(--surface-2); }
+[data-skin="tailadmin"] .topbar { backdrop-filter: none; padding: 0 1.5rem; gap: .75rem; }
+[data-skin="tailadmin"] .topbar .icon-btn { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--border); color: var(--muted); }
+[data-skin="tailadmin"] .topbar .icon-btn.menu-btn { border-radius: var(--r-ctl); }
+[data-skin="tailadmin"] .crumbs { font-size: .9rem; }
+[data-skin="tailadmin"] .user-chip { border: 0; background: transparent; padding: 0 .25rem 0 0; gap: .75rem; }
+[data-skin="tailadmin"] .user-chip .avatar { width: 44px; height: 44px; font-size: .95rem; }
+[data-skin="tailadmin"] .content { max-width: 1536px; padding: 1.5rem 1.5rem 3rem; gap: 1.5rem; }
+[data-skin="tailadmin"] .card { padding: 1.5rem; }
+[data-skin="tailadmin"] .stat-tile { padding: 1.25rem 1.5rem; }
+[data-skin="tailadmin"] .stat-icon { width: 48px; height: 48px; border-radius: var(--radius); background: var(--surface-2); color: var(--text); }
+[data-skin="tailadmin"] .stat-value { font-weight: 700; font-size: 1.85rem; }
+[data-skin="tailadmin"] .btn { height: 44px; font-weight: 500; padding: 0 1.1rem; }
+[data-skin="tailadmin"] .btn-sm { height: 36px; }
+[data-skin="tailadmin"] .btn-lg { height: 48px; }
+[data-skin="tailadmin"] .btn-primary { box-shadow: var(--shadow-sm); }
+[data-skin="tailadmin"] input:not([type="checkbox"]):not([type="radio"]),
+[data-skin="tailadmin"] select { min-height: 44px; padding: .6rem 1rem; border-color: var(--border-strong); box-shadow: var(--shadow-sm); background: transparent; }
+[data-skin="tailadmin"] input:focus, [data-skin="tailadmin"] select:focus, [data-skin="tailadmin"] textarea:focus { border-color: #9cb9ff; box-shadow: 0 0 0 4px var(--ring); }
+[data-skin="tailadmin"] .table thead th { background: transparent; font-weight: 500; font-size: .8rem; }
+[data-skin="tailadmin"] .badge { font-weight: 500; border-color: transparent; }
+[data-skin="tailadmin"] .module-card::before, [data-skin="tailadmin"] .connection-card::before { display: none; }
+[data-skin="tailadmin"] .module-icon, [data-skin="tailadmin"] .connection-logo { border-radius: var(--radius); width: 48px; height: 48px; }
+
+/* TailAdmin giriş: form solda, koyu marka paneli sağda */
+[data-skin="tailadmin"] .auth-shell { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+[data-skin="tailadmin"] .auth-hero {
+    order: 2; align-items: center; justify-content: center; text-align: center;
+    background: #161950;
+}
+[data-skin="tailadmin"] .auth-hero::after {
+    background-image: linear-gradient(rgba(255, 255, 255, .06) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, .06) 1px, transparent 1px);
+    background-size: 56px 56px;
+    mask-image: radial-gradient(ellipse at 100% 0%, #000 10%, transparent 55%), radial-gradient(ellipse at 0% 100%, #000 10%, transparent 55%);
+    mask-composite: add;
+}
+[data-skin="tailadmin"] .auth-hero-inner { align-items: center; max-width: 400px; }
+[data-skin="tailadmin"] .auth-hero h2 { margin-top: 1.5rem; font-size: 1.9rem; font-weight: 600; }
+[data-skin="tailadmin"] .auth-hero p { color: #98a2b3; }
+[data-skin="tailadmin"] .auth-points { display: none; }
+[data-skin="tailadmin"] .auth-card { max-width: 440px; }
+[data-skin="tailadmin"] .auth-card-head h1 { font-size: 1.9rem; font-weight: 600; }
+
+/* ==========================================================================
+   Shadcn Dashboard (Lyra stili: keskin köşeler, nötr gri, sıkı yerleşim)
+   ========================================================================== */
+
+:root[data-skin="shadcn"] {
+    --font: "Geist", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: "Geist Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+    --font-size: 13.5px;
+
+    --bg: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #f5f5f5;
+    --surface-3: #e5e5e5;
+    --border: #e5e5e5;
+    --border-strong: #d4d4d4;
+    --text: #0a0a0a;
+    --text-2: #404040;
+    --muted: #737373;
+
+    --accent: #171717;
+    --accent-hover: #262626;
+    --accent-soft: #f5f5f5;
+    --accent-text: #fafafa;
+    --ring: rgba(163, 163, 163, .5);
+    --nav-active: #171717;
+    --nav-active-bg: #f0f0f0;
+    --chart-1: #f54900;
+
+    --sidebar-bg: #ffffff;
+    --sidebar-border: #e5e5e5;
+    --topbar-bg: #ffffff;
+    --brand-bg: #171717;
+    --brand-fg: #fafafa;
+    --brand-shadow: none;
+
+    --shadow-sm: none;
+    --shadow: none;
+    --shadow-lg: 0 1rem 3rem rgba(0, 0, 0, .175);
+
+    --radius-sm: 0;
+    --radius: 0;
+    --radius-lg: 0;
+    --r-ctl: 0;
+    --r-xs: 0;
+    --r-pill: 0;
+    --sidebar-w: 256px;
+    --sidebar-w-collapsed: 68px;
+    --topbar-h: 52px;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root[data-skin="shadcn"]:not([data-theme="light"]) {
+        --bg: #0a0a0a;
+        --surface: #0a0a0a;
+        --surface-2: #1c1c1c;
+        --surface-3: #262626;
+        --border: #262626;
+        --border-strong: #363636;
+        --text: #fafafa;
+        --text-2: #d4d4d4;
+        --muted: #a1a1a1;
+        --accent: #e5e5e5;
+        --accent-hover: #ffffff;
+        --accent-soft: #1c1c1c;
+        --accent-text: #171717;
+        --ring: rgba(115, 115, 115, .5);
+        --nav-active: #fafafa;
+        --nav-active-bg: #262626;
+        --chart-1: #ff8904;
+        --sidebar-bg: #0a0a0a;
+        --sidebar-border: #262626;
+        --topbar-bg: #0a0a0a;
+        --brand-bg: #fafafa;
+        --brand-fg: #171717;
+    }
+}
+
+:root[data-skin="shadcn"][data-theme="dark"] {
+    --bg: #0a0a0a;
+    --surface: #0a0a0a;
+    --surface-2: #1c1c1c;
+    --surface-3: #262626;
+    --border: #262626;
+    --border-strong: #363636;
+    --text: #fafafa;
+    --text-2: #d4d4d4;
+    --muted: #a1a1a1;
+    --accent: #e5e5e5;
+    --accent-hover: #ffffff;
+    --accent-soft: #1c1c1c;
+    --accent-text: #171717;
+    --ring: rgba(115, 115, 115, .5);
+    --nav-active: #fafafa;
+    --nav-active-bg: #262626;
+    --chart-1: #ff8904;
+    --sidebar-bg: #0a0a0a;
+    --sidebar-border: #262626;
+    --topbar-bg: #0a0a0a;
+    --brand-bg: #fafafa;
+    --brand-fg: #171717;
+}
+
+/* Çerçeveli, sayfadan ayrık yan menü kutusu */
+@media (min-width: 961px) {
+    [data-skin="shadcn"] .sidebar {
+        top: .5rem; height: calc(100vh - 1rem); margin: .5rem 0 .5rem .5rem;
+        border: 1px solid var(--sidebar-border); padding: 0 .6rem .6rem;
+    }
+}
+[data-skin="shadcn"] .sidebar-brand { border-bottom: 1px solid var(--sidebar-border); margin: 0 -.6rem; padding: 0 .9rem; height: var(--topbar-h); }
+[data-skin="shadcn"] .brand { font-size: 1rem; font-weight: 600; }
+[data-skin="shadcn"] .brand-mark { width: 28px; height: 28px; }
+[data-skin="shadcn"] .nav-group { margin-top: .9rem; }
+[data-skin="shadcn"] .nav-group-title { text-transform: none; letter-spacing: 0; font-size: .75rem; font-weight: 500; padding: 0 .6rem .25rem; }
+[data-skin="shadcn"] .nav-item { height: 32px; padding: 0 .6rem; gap: .6rem; font-size: .85rem; font-weight: 400; color: var(--text-2); }
+[data-skin="shadcn"] .nav-item .icon { color: var(--text-2); width: 16px; height: 16px; }
+[data-skin="shadcn"] .nav-item.active { font-weight: 500; }
+[data-skin="shadcn"] .sidebar-user { display: flex; border-top: 1px solid var(--sidebar-border); margin: .5rem -.6rem 0; padding: .6rem .9rem 0; }
+[data-skin="shadcn"] .sidebar-user:hover { background: transparent; }
+[data-skin="shadcn"] .sidebar-user .avatar { border-radius: 0; width: 32px; height: 32px; }
+[data-skin="shadcn"] .sidebar-collapse { height: 30px; font-size: .8rem; }
+[data-skin="shadcn"] .topbar { backdrop-filter: none; padding: 0 1rem; }
+[data-skin="shadcn"] .topbar-sep { display: block; }
+[data-skin="shadcn"] .user-chip { display: none; }
+[data-skin="shadcn"] .icon-btn { width: 32px; height: 32px; }
+[data-skin="shadcn"] .content { max-width: 1410px; padding: 1.25rem 1.25rem 2.5rem; gap: 1rem; }
+[data-skin="shadcn"] h1 { font-size: 1.35rem; font-weight: 600; }
+[data-skin="shadcn"] h2 { font-size: .95rem; }
+[data-skin="shadcn"] .card { border: 0; box-shadow: 0 0 0 1px rgba(10, 10, 10, .1); padding: 1rem; gap: .85rem; }
+[data-skin="shadcn"] .card-flush { padding: 0; gap: 0; }
+[data-skin="shadcn"] .card-pad { padding: .9rem 1rem; }
+[data-skin="shadcn"] .stat-tile { border: 0; box-shadow: 0 0 0 1px rgba(10, 10, 10, .1); padding: 1rem; }
+[data-skin="shadcn"] .stat-value { font-size: 1.5rem; font-weight: 600; }
+[data-skin="shadcn"] .stat-icon { background: var(--surface-2); color: var(--text); }
+[data-skin="shadcn"] .btn { height: 32px; padding: 0 .75rem; font-size: .8rem; font-weight: 500; }
+[data-skin="shadcn"] .btn-sm { height: 28px; padding: 0 .6rem; font-size: .78rem; }
+[data-skin="shadcn"] .btn-lg { height: 36px; font-size: .85rem; }
+[data-skin="shadcn"] .btn-primary { box-shadow: none; }
+[data-skin="shadcn"] input:not([type="checkbox"]):not([type="radio"]),
+[data-skin="shadcn"] select { min-height: 32px; padding: .35rem .65rem; font-size: .82rem; border-color: var(--border); background: transparent; }
+[data-skin="shadcn"] input:focus, [data-skin="shadcn"] select:focus, [data-skin="shadcn"] textarea:focus { border-color: var(--muted); box-shadow: 0 0 0 1px var(--ring); }
+[data-skin="shadcn"] .field > span { font-size: .78rem; }
+[data-skin="shadcn"] .table { font-size: .8rem; }
+[data-skin="shadcn"] .table th, [data-skin="shadcn"] .table td { padding: .5rem .8rem; }
+[data-skin="shadcn"] .table thead th { background: transparent; color: var(--muted); font-weight: 500; }
+[data-skin="shadcn"] .badge { font-weight: 500; height: 20px; font-size: .7rem; }
+[data-skin="shadcn"] .alert { font-size: .8rem; padding: .55rem .7rem; }
+[data-skin="shadcn"] .module-card::before, [data-skin="shadcn"] .connection-card::before { height: 2px; }
+[data-skin="shadcn"] .skin-option.is-active { box-shadow: 0 0 0 1px var(--accent); }
+
+@media (prefers-color-scheme: dark) {
+    :root[data-skin="shadcn"]:not([data-theme="light"]) .card,
+    :root[data-skin="shadcn"]:not([data-theme="light"]) .stat-tile { box-shadow: 0 0 0 1px rgba(255, 255, 255, .1); }
+}
+:root[data-skin="shadcn"][data-theme="dark"] .card,
+:root[data-skin="shadcn"][data-theme="dark"] .stat-tile { box-shadow: 0 0 0 1px rgba(255, 255, 255, .1); }
+
+/* Shadcn giriş: ortalanmış, çerçeveli kart */
+[data-skin="shadcn"] .auth-shell { grid-template-columns: 1fr; background: var(--surface-2); }
+[data-skin="shadcn"] .auth-hero { display: none; }
+[data-skin="shadcn"] .auth-main { padding: 2rem 1rem; }
+[data-skin="shadcn"] .auth-card { max-width: 420px; background: var(--surface); box-shadow: 0 0 0 1px var(--border); padding: 1.5rem; gap: .95rem; }
+[data-skin="shadcn"] .auth-card-head h1 { font-size: 1.15rem; }
+[data-skin="shadcn"] .auth-card-head::before {
+    content: "FyBlue"; display: block; font-weight: 600; font-size: .8rem; letter-spacing: .02em;
+    color: var(--muted); padding-bottom: .9rem; margin-bottom: .6rem; border-bottom: 1px solid var(--border);
+}
+
+/* ==========================================================================
+   Next Shadcn Dashboard Starter (kiranism · Vercel teması)
+   ========================================================================== */
+
+:root[data-skin="starter"] {
+    --font: "Geist", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: "Geist Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+    --font-size: 14px;
+
+    --bg: #fcfcfc;
+    --surface: #ffffff;
+    --surface-2: #f5f5f5;
+    --surface-3: #ebebeb;
+    --border: #e5e5e5;
+    --border-strong: #d9d9d9;
+    --text: #000000;
+    --text-2: #333333;
+    --muted: #525252;
+
+    --accent: #000000;
+    --accent-hover: #262626;
+    --accent-soft: #ebebeb;
+    --accent-text: #ffffff;
+    --ring: rgba(0, 0, 0, .18);
+    --nav-active: #000000;
+    --nav-active-bg: #ebebeb;
+    --chart-1: #3b5bdb;
+
+    --sidebar-bg: #fcfcfc;
+    --sidebar-border: #ebebeb;
+    --topbar-bg: color-mix(in srgb, #fcfcfc 60%, transparent);
+    --brand-bg: #000000;
+    --brand-fg: #ffffff;
+    --brand-shadow: none;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, .09);
+    --shadow: 0 1px 2px rgba(0, 0, 0, .09);
+    --shadow-lg: 0 8px 10px -1px rgba(0, 0, 0, .18), 0 1px 2px rgba(0, 0, 0, .18);
+
+    --radius-sm: 6px;
+    --radius: 10px;
+    --radius-lg: 12px;
+    --r-ctl: 6px;
+    --r-xs: 4px;
+    --sidebar-w: 256px;
+    --sidebar-w-collapsed: 64px;
+    --topbar-h: 56px;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root[data-skin="starter"]:not([data-theme="light"]) {
+        --bg: #000000;
+        --surface: #090909;
+        --surface-2: #1a1a1a;
+        --surface-3: #262626;
+        --border: #222222;
+        --border-strong: #303030;
+        --text: #ffffff;
+        --text-2: #d9d9d9;
+        --muted: #a8a8a8;
+        --accent: #ffffff;
+        --accent-hover: #e5e5e5;
+        --accent-soft: #262626;
+        --accent-text: #000000;
+        --ring: rgba(168, 168, 168, .4);
+        --nav-active: #ffffff;
+        --nav-active-bg: #303030;
+        --chart-1: #4f6ef7;
+        --sidebar-bg: #111111;
+        --sidebar-border: #303030;
+        --topbar-bg: color-mix(in srgb, #000 60%, transparent);
+        --brand-bg: #ffffff;
+        --brand-fg: #000000;
+        --shadow-sm: 0 1px 2px rgba(0, 0, 0, .5);
+        --shadow: 0 1px 2px rgba(0, 0, 0, .5);
+    }
+}
+
+:root[data-skin="starter"][data-theme="dark"] {
+    --bg: #000000;
+    --surface: #090909;
+    --surface-2: #1a1a1a;
+    --surface-3: #262626;
+    --border: #222222;
+    --border-strong: #303030;
+    --text: #ffffff;
+    --text-2: #d9d9d9;
+    --muted: #a8a8a8;
+    --accent: #ffffff;
+    --accent-hover: #e5e5e5;
+    --accent-soft: #262626;
+    --accent-text: #000000;
+    --ring: rgba(168, 168, 168, .4);
+    --nav-active: #ffffff;
+    --nav-active-bg: #303030;
+    --chart-1: #4f6ef7;
+    --sidebar-bg: #111111;
+    --sidebar-border: #303030;
+    --topbar-bg: color-mix(in srgb, #000 60%, transparent);
+    --brand-bg: #ffffff;
+    --brand-fg: #000000;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, .5);
+    --shadow: 0 1px 2px rgba(0, 0, 0, .5);
+}
+
+[data-skin="starter"] .sidebar { padding: 0 .5rem .5rem; }
+[data-skin="starter"] .sidebar-brand { padding: 0 .5rem; }
+[data-skin="starter"] .brand { font-size: .95rem; font-weight: 600; letter-spacing: -.01em; }
+[data-skin="starter"] .brand-mark { width: 32px; height: 32px; border-radius: 8px; }
+[data-skin="starter"] .nav-group { margin-top: .75rem; gap: .1rem; }
+[data-skin="starter"] .nav-group-title { text-transform: none; letter-spacing: 0; font-size: .75rem; font-weight: 500; color: color-mix(in srgb, var(--text) 70%, transparent); padding: 0 .5rem .35rem; }
+[data-skin="starter"] .nav-item { height: 32px; padding: 0 .5rem; gap: .5rem; font-size: .875rem; font-weight: 400; color: var(--text); }
+[data-skin="starter"] .nav-item .icon { color: var(--text); width: 16px; height: 16px; }
+[data-skin="starter"] .nav-item:hover { background: var(--nav-active-bg); }
+[data-skin="starter"] .nav-item.active { font-weight: 500; }
+[data-skin="starter"] .sidebar-user { display: flex; }
+[data-skin="starter"] .sidebar-user .avatar { border-radius: 8px; width: 32px; height: 32px; }
+[data-skin="starter"] .sidebar-user:hover { background: var(--nav-active-bg); }
+[data-skin="starter"] .sidebar-collapse { height: 32px; padding: 0 .6rem; }
+[data-skin="starter"] .topbar { border-bottom: 0; padding: 0 1rem; }
+[data-skin="starter"] .topbar-sep { display: block; height: 16px; margin: 0 .35rem; }
+[data-skin="starter"] .icon-btn.sidebar-trigger,
+[data-skin="shadcn"] .icon-btn.sidebar-trigger { display: inline-grid; margin-left: -.35rem; }
+[data-skin="starter"] .sidebar-collapse,
+[data-skin="shadcn"] .sidebar-collapse { display: none; }
+[data-skin="starter"] .user-chip { display: none; }
+[data-skin="starter"] .icon-btn { width: 32px; height: 32px; border-radius: var(--r-ctl); }
+[data-skin="starter"] .content { max-width: none; padding: .5rem 1rem 2.5rem; gap: 1rem; }
+[data-skin="starter"] h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -.025em; }
+[data-skin="starter"] .card { padding: 1.5rem; gap: 1rem; }
+[data-skin="starter"] .card-flush { padding: 0; gap: 0; }
+[data-skin="starter"] .stat-tile { padding: 1.25rem 1.5rem; }
+[data-skin="starter"] .stat-value { font-size: 1.6rem; font-weight: 600; }
+[data-skin="starter"] .stat-icon { background: transparent; color: var(--muted); width: auto; height: auto; justify-content: start; }
+[data-skin="starter"] .btn { height: 36px; padding: 0 1rem; font-size: .875rem; font-weight: 500; }
+[data-skin="starter"] .btn-sm { height: 32px; padding: 0 .75rem; }
+[data-skin="starter"] .btn-lg { height: 40px; }
+[data-skin="starter"] .btn-primary { box-shadow: var(--shadow-sm); }
+[data-skin="starter"] input:not([type="checkbox"]):not([type="radio"]),
+[data-skin="starter"] select { min-height: 36px; padding: .4rem .75rem; box-shadow: var(--shadow-sm); border-color: var(--border); background: transparent; }
+[data-skin="starter"] input:focus, [data-skin="starter"] select:focus, [data-skin="starter"] textarea:focus { border-color: var(--text); box-shadow: 0 0 0 3px var(--ring); }
+[data-skin="starter"] .table thead th { background: transparent; color: var(--muted); font-weight: 500; }
+[data-skin="starter"] .badge { border-radius: 6px; font-weight: 500; }
+[data-skin="starter"] .module-card::before, [data-skin="starter"] .connection-card::before { display: none; }
+
+/* Starter giriş: solda koyu marka paneli, sağda form */
+[data-skin="starter"] .auth-shell { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+[data-skin="starter"] .auth-hero { background: #18181b; align-items: stretch; padding: 2.5rem; }
+[data-skin="starter"] .auth-hero::after { display: none; }
+[data-skin="starter"] .auth-hero-inner { max-width: none; justify-content: space-between; width: 100%; }
+[data-skin="starter"] .auth-hero .brand-mark { background: #fff; color: #000; }
+[data-skin="starter"] .auth-hero h2 { margin-top: auto; font-size: 1.15rem; font-weight: 400; letter-spacing: 0; line-height: 1.6; }
+[data-skin="starter"] .auth-hero h2 br { display: none; }
+[data-skin="starter"] .auth-hero p { font-size: .9rem; color: #a1a1aa; }
+[data-skin="starter"] .auth-points .icon { color: #a1a1aa; }
+[data-skin="starter"] .auth-points { font-size: .9rem; color: #d4d4d8; }
+[data-skin="starter"] .auth-card { max-width: 380px; }
+[data-skin="starter"] .auth-card-head { align-items: center; text-align: center; }
+[data-skin="starter"] .auth-card-head h1 { font-size: 1.5rem; font-weight: 600; letter-spacing: -.025em; }
+
+@media (max-width: 900px) {
+    [data-skin="tailadmin"] .auth-shell,
+    [data-skin="starter"] .auth-shell { grid-template-columns: 1fr; }
+    [data-skin="tailadmin"] .auth-hero { order: 0; }
+    [data-skin="starter"] .auth-hero { padding: 1.25rem; }
+}
+
+@media (max-width: 960px) {
+    [data-skin="shadcn"] .sidebar-brand { margin: 0 -.6rem; }
+    [data-skin="tailadmin"] .topbar .icon-btn:not(.menu-btn) { border: 0; }
+    .crumbs, .topbar-sep { display: none !important; }
+}

@@ -14,13 +14,18 @@
                 var t = localStorage.getItem('fyblue.theme');
                 if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
             } catch (e) { }
+            // Arayüz şablonu (giriş ekranında seçilir): tailadmin | shadcn | starter | classic
+            var skins = ['tailadmin', 'shadcn', 'starter', 'classic'], s = null;
+            try { s = localStorage.getItem('fyblue.skin'); } catch (e) { }
+            document.documentElement.setAttribute('data-skin', skins.indexOf(s) >= 0 ? s : 'tailadmin');
         })();
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" />
     <link rel="preload" id="webassembly" />
-    <link rel="stylesheet" href="css/app.css?v=2026-09-25" />
+    <link rel="stylesheet" href="css/app.css?v=2026-09-27" />
+    <link rel="stylesheet" href="css/skins.css?v=2026-09-27" />
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <script type="importmap"></script>
 </head>
@@ -40,7 +45,7 @@
         <a href="." class="reload">Yeniden yükle</a>
         <span class="dismiss">✕</span>
     </div>
-    <script src="js/app.js?v=2026-09-25"></script>
+    <script src="js/app.js?v=2026-09-27"></script>
     <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
 </body>
 
