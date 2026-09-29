@@ -59,7 +59,15 @@ public sealed class OsosSessionService
         finally { http.Dispose(); }
     }
 
-    /// <summary>Kullanıcı için geçerli bir oturum sağlar (gerekirse yeniden login).</summary>
+    private const string ConnectionPrefix = "conn:";
+
+    /// <summary>
+    /// Müşteri modülündeki bir OSOS bağlantısının (osos_connections) oturum anahtarı. Bu servisteki
+    /// appUserId alan tüm metodlara verilebilir: kimlik, kullanıcının bağlı hesabı yerine bağlantıdan okunur.
+    /// </summary>
+    public static string ConnectionKey(int ososConnectionId) => ConnectionPrefix + ososConnectionId;
+
+    /// <summary>Kullanıcı (veya <see cref="ConnectionKey"/>) için geçerli bir oturum sağlar (gerekirse yeniden login).</summary>
     public async Task<string> EnsureSessionAsync(string appUserId, CancellationToken ct)
     {
         if (_sessions.TryGetValue(appUserId, out var s) && DateTime.UtcNow - s.EstablishedAt < SessionTtl)
@@ -67,12 +75,25 @@ public sealed class OsosSessionService
 
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var cred = await db.OsosCredentials.AsNoTracking().FirstOrDefaultAsync(c => c.AppUserId == appUserId, ct)
-                   ?? throw new OsosNotLinkedException();
+        string userCode, protectedPassword;
+        bool rememberMe = false;
+        if (appUserId.StartsWith(ConnectionPrefix, StringComparison.Ordinal))
+        {
+            int id = int.Parse(appUserId[ConnectionPrefix.Length..]);
+            var conn = await db.OsosConnections.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id, ct)
+                       ?? throw new InvalidOperationException("OSOS bağlantısı bulunamadı.");
+            (userCode, protectedPassword) = (conn.Username, conn.EncryptedPassword);
+        }
+        else
+        {
+            var cred = await db.OsosCredentials.AsNoTracking().FirstOrDefaultAsync(c => c.AppUserId == appUserId, ct)
+                       ?? throw new OsosNotLinkedException();
+            (userCode, protectedPassword, rememberMe) = (cred.OsosUserCode, cred.OsosPasswordProtected, cred.RememberMe);
+        }
 
-        string password = Unprotect(cred.OsosPasswordProtected);
+        string password = Unprotect(protectedPassword);
         var (client, http) = CreateClient();
-        var resp = await client.LoginAsync(cred.OsosUserCode, password, rememberMe: cred.RememberMe, ct: ct);
+        var resp = await client.LoginAsync(userCode, password, rememberMe: rememberMe, ct: ct);
         if (string.IsNullOrWhiteSpace(resp.SessionKey))
         {
             http.Dispose();

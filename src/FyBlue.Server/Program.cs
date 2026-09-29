@@ -112,6 +112,9 @@ builder.Services.AddScoped<SearchService>();
 // Müşteri modülü
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<FyBlue.Server.Services.Customers.CurrentUser>();
+builder.Services.AddScoped<FyBlue.Server.Services.Customers.OsosSyncService>();
+builder.Services.AddScoped<FyBlue.Server.Services.Customers.CustomerOsosQueryService>();
+builder.Services.AddSingleton<FyBlue.Server.Services.Customers.IFileStorage, FyBlue.Server.Services.Customers.LocalFileStorage>();
 
 builder.Services.AddHangfire(cfg => cfg
     .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
@@ -269,6 +272,12 @@ app.UseHangfireDashboard("/hangfire", new DashboardOptions
 {
     Authorization = new[] { new BasicAuthDashboardFilter(hfUser, hfPass) }
 });
+
+// Müşteri OSOS bağlantılarının günlük senkronizasyonu (abonelikler + tesisat kaynak değerleri).
+app.Services.GetRequiredService<IRecurringJobManager>().AddOrUpdate<FyBlue.Server.Services.Customers.OsosSyncService>(
+    "system:osos-connections-sync", s => s.SyncAllAsync(),
+    builder.Configuration["Customers:SyncCron"] ?? "0 6 * * *",
+    new RecurringJobOptions { TimeZone = TimeZoneInfo.Local });
 
 app.MapControllers();
 app.MapHealthChecks("/health");

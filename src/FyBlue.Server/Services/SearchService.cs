@@ -40,35 +40,30 @@ public sealed class SearchService
     public async Task<OsosResult> RunScreenAsync(string appUserId, string screen, long serno,
         DateTime start, DateTime end, int type, long[]? selected, CancellationToken ct)
     {
-        long D(DateTime dt) => ToOsosDate(dt);
         var sel = screen is "Subscriptions" or "Dashboard" ? [] : await ResolveSelectedAsync(appUserId, selected, ct);
-        object p;
-        string method;
-        switch (screen)
+        var (name, method, p) = BuildScreenCall(screen, serno, start, end, type, sel);
+        bool dated = name != "Subscriptions";
+        return await RunAndSaveAsync(appUserId, name, method, p, serno, dated ? start : null, dated ? end : null, ct);
+    }
+
+    /// <summary>Ekran → (normalize ekran adı, OSOS MethodName, parametreler). Bilinmeyen ekran Consumption sayılır.</summary>
+    public static (string screen, string method, object parameters) BuildScreenCall(string screen, long serno,
+        DateTime start, DateTime end, int type, long[] sel)
+    {
+        long D(DateTime dt) => ToOsosDate(dt);
+        return screen switch
         {
-            case "Endex":
-                method = OsosMethods.GetCustomerSelectedCurrentEndexes;
-                p = new { Serno = serno, StartDate = D(start), EndDate = D(end), Selected = sel, MarkFilterString = (string?)null, TitleFilterString = (string?)null, TotalItemCount = 0 };
-                break;
-            case "Profiles":
-                method = OsosMethods.GetCustomerSelectedProfiles;
-                p = new { Serno = serno, StartDate = D(start), EndDate = D(end), Selected = sel, MarkFilterString = (string?)null, TitleFilterString = (string?)null, TotalItemCount = 0, WithourMultiplier = true };
-                break;
-            case "Subscriptions":
-                method = OsosMethods.GetCustomerPortalSubscriptions;
-                p = new { Serno = serno, PageSize = 1000, PageNumber = 1 };
-                return await RunAndSaveAsync(appUserId, screen, method, p, serno, null, null, ct);
-            case "Dashboard":
-                method = OsosMethods.GetOwnerConsumptions;
-                p = new { OwnerSerno = serno, OwnerType = 15, StartDate = D(start), EndDate = D(end), IsOnlySuccess = true, IncludeLoadProfiles = false, IncludeVersions = false, WithoutMultiplier = false, MergeResult = true };
-                break;
-            default: // Consumption
-                screen = "Consumption";
-                method = OsosMethods.GetCustomerSelectedConsumptions;
-                p = new { Serno = serno, StartDate = D(start), EndDate = D(end), Selected = sel, Type = type, Period = 0, MarkFilterString = (string?)null, TitleFilterString = (string?)null, TotalItemCount = 0 };
-                break;
-        }
-        return await RunAndSaveAsync(appUserId, screen, method, p, serno, start, end, ct);
+            "Endex" => (screen, OsosMethods.GetCustomerSelectedCurrentEndexes,
+                new { Serno = serno, StartDate = D(start), EndDate = D(end), Selected = sel, MarkFilterString = (string?)null, TitleFilterString = (string?)null, TotalItemCount = 0 }),
+            "Profiles" => (screen, OsosMethods.GetCustomerSelectedProfiles,
+                new { Serno = serno, StartDate = D(start), EndDate = D(end), Selected = sel, MarkFilterString = (string?)null, TitleFilterString = (string?)null, TotalItemCount = 0, WithourMultiplier = true }),
+            "Subscriptions" => (screen, OsosMethods.GetCustomerPortalSubscriptions,
+                new { Serno = serno, PageSize = 1000, PageNumber = 1 }),
+            "Dashboard" => (screen, OsosMethods.GetOwnerConsumptions,
+                new { OwnerSerno = serno, OwnerType = 15, StartDate = D(start), EndDate = D(end), IsOnlySuccess = true, IncludeLoadProfiles = false, IncludeVersions = false, WithoutMultiplier = false, MergeResult = true }),
+            _ => ("Consumption", OsosMethods.GetCustomerSelectedConsumptions,
+                new { Serno = serno, StartDate = D(start), EndDate = D(end), Selected = sel, Type = type, Period = 0, MarkFilterString = (string?)null, TitleFilterString = (string?)null, TotalItemCount = 0 }),
+        };
     }
 
     /// <summary>Çağrıyı yapar, geçmiş + snapshot kaydeder, ham sonucu döner.</summary>

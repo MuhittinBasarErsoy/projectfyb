@@ -66,13 +66,18 @@ services:
       Hangfire__User: ${HANGFIRE_USER:-admin}
       Hangfire__Password: ${HANGFIRE_PASSWORD:-}
       ExposeApiDocs: ${EXPOSE_API_DOCS:-false}
+      Auth__AllowRegistration: ${ALLOW_REGISTRATION:-true}
+      Storage__FilesPath: /var/lib/fyblue/files
       TZ: Europe/Istanbul
     volumes:
       # Data Protection anahtarları: silinirse saklanan OSOS/EPİAŞ şifreleri çözülemez.
       - fyblue-keys:/var/lib/fyblue/keys
+      # Müşteri belgeleri/faturalar (documents.storage_key).
+      - fyblue-files:/var/lib/fyblue/files
     restart: unless-stopped
 
 volumes:
   mssql-data:
   fyblue-keys:
+  fyblue-files:
   ts-state:
