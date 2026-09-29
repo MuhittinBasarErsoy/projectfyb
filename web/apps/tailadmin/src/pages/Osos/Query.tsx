@@ -1,12 +1,13 @@
 import PageMeta from "@/components/common/PageMeta";
 import Checkbox from "@/components/form/input/Checkbox";
 import { ResultPanel } from "@/components/fyblue/data";
+import SubscriptionPicker from "@/components/fyblue/SubscriptionPicker";
 import { LinkGate } from "@/components/fyblue/shell";
-import { Card, Field, Notice, PageHeader, Segmented, SelectInput, Spinner, TextInput } from "@/components/fyblue/ui";
+import { Card, Field, Notice, PageHeader, Segmented, Spinner, TextInput } from "@/components/fyblue/ui";
 import Badge from "@/components/ui/badge/Badge";
 import Button from "@/components/ui/button/Button";
 import { ChevronDownIcon, SearchIcon } from "@/icons";
-import { OSOS_SCREENS, PAGE_TEXT, useOsosQuery } from "@fyblue/core";
+import { OSOS_SCREENS, PAGE_TEXT, subscriptionText, useOsosQuery } from "@fyblue/core";
 import { useState } from "react";
 
 export default function Query() {
@@ -33,14 +34,7 @@ export default function Query() {
                   {q.screen === "Dashboard" &&
                     (q.subs.length > 0 ? (
                       <Field label="Tesisat">
-                        <SelectInput value={String(q.ownerSerno)} onChange={(v) => q.setOwnerSerno(Number(v))}>
-                          <option value="0">— seçin —</option>
-                          {q.subs.map((s) => (
-                            <option key={s.serno} value={s.serno}>
-                              {s.label} (#{s.serno})
-                            </option>
-                          ))}
-                        </SelectInput>
+                        <SubscriptionPicker subs={q.subs} value={q.ownerSerno} onChange={q.setOwnerSerno} allowAuto={false} />
                       </Field>
                     ) : (
                       <Field label="Owner Serno (tesisat)">
@@ -89,13 +83,22 @@ export default function Query() {
                   <ChevronDownIcon className={`ms-auto size-5 transition-transform ${filterOpen ? "rotate-180" : ""}`} />
                 </button>
                 {filterOpen && (
-                  <div className="custom-scrollbar grid max-h-64 grid-cols-1 gap-3 overflow-y-auto border-t border-gray-100 p-4 sm:grid-cols-2 dark:border-gray-800">
-                    {q.subs.map((s) => (
+                  <div className="border-t border-gray-100 p-4 pb-0 dark:border-gray-800">
+                    <TextInput
+                      value={q.subsQuery}
+                      onChange={(e) => q.setSubsQuery(e.target.value)}
+                      placeholder="Ünvan, abone no veya serno ile ara…"
+                    />
+                  </div>
+                )}
+                {filterOpen && (
+                  <div className="custom-scrollbar grid max-h-64 grid-cols-1 gap-3 overflow-y-auto p-4 sm:grid-cols-2">
+                    {q.visibleSubs.map((s) => (
                       <Checkbox
                         key={s.serno}
                         checked={q.selected.includes(s.serno)}
                         onChange={(on) => q.toggle(s.serno, on)}
-                        label={s.serno > 0 ? `${s.label} #${s.serno}` : s.label}
+                        label={subscriptionText(s)}
                       />
                     ))}
                   </div>

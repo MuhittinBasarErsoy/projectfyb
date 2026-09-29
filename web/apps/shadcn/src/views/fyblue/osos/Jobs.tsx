@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DataTable, Td, Th, Tr } from "@/components/fyblue/data";
+import SubscriptionPicker from "@/components/fyblue/SubscriptionPicker";
 import { EmptyBox, FormField, Notice, PageHeader, Section, Select, SkeletonRows } from "@/components/fyblue/ui";
 import {
   CRON_PRESETS,
@@ -87,15 +88,8 @@ export default function Jobs() {
             </>
           ) : (
             <>
-              <FormField label="Tesisat (Serno)">
-                <Select value={String(j.serno)} onChange={(v) => j.setSerno(Number(v))}>
-                  <option value="0">Otomatik (müşteri)</option>
-                  {j.subs.map((s) => (
-                    <option key={s.serno} value={s.serno}>
-                      {s.label} {s.serno > 0 ? `(#${s.serno})` : ""}
-                    </option>
-                  ))}
-                </Select>
+              <FormField label="Tesisat" className="sm:col-span-2">
+                <SubscriptionPicker subs={j.subs} value={j.serno} onChange={j.setSerno} />
               </FormField>
               {j.screen !== "Subscriptions" && (
                 <FormField label="Son kaç gün">

@@ -1,4 +1,5 @@
 import PageMeta from "@/components/common/PageMeta";
+import SubscriptionPicker from "@/components/fyblue/SubscriptionPicker";
 import { DataTable, Td, Th, Tr } from "@/components/fyblue/data";
 import { Card, EmptyState, Field, IconButton, Notice, PageHeader, SelectInput, SkeletonRows, TextInput } from "@/components/fyblue/ui";
 import Badge from "@/components/ui/badge/Badge";
@@ -100,15 +101,8 @@ export default function Jobs() {
               </>
             ) : (
               <>
-                <Field label="Tesisat (Serno)">
-                  <SelectInput value={String(j.serno)} onChange={(v) => j.setSerno(Number(v))}>
-                    <option value="0">Otomatik (müşteri)</option>
-                    {j.subs.map((s) => (
-                      <option key={s.serno} value={s.serno}>
-                        {s.label} {s.serno > 0 ? `(#${s.serno})` : ""}
-                      </option>
-                    ))}
-                  </SelectInput>
+                <Field label="Tesisat" className="sm:col-span-2">
+                  <SubscriptionPicker subs={j.subs} value={j.serno} onChange={j.setSerno} />
                 </Field>
                 {j.screen !== "Subscriptions" && (
                   <Field label="Son kaç gün">
