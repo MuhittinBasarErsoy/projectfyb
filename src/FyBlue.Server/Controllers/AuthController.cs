@@ -15,16 +15,25 @@ public sealed class AuthController : ControllerBase
 {
     private readonly UserManager<AppUser> _users;
     private readonly TokenService _tokens;
+    private readonly IConfiguration _config;
 
-    public AuthController(UserManager<AppUser> users, TokenService tokens)
+    public AuthController(UserManager<AppUser> users, TokenService tokens, IConfiguration config)
     {
         _users = users;
         _tokens = tokens;
+        _config = config;
     }
 
+    /// <summary>
+    /// Açık kayıt danışman hesabı oluşturur. Auth:AllowRegistration=false iken yalnızca ilk kullanıcı kayıt olabilir;
+    /// diğer kullanıcıları danışmanlar oluşturur (müşteri kullanıcıları müşteri detayından).
+    /// </summary>
     [HttpPost("register")]
     public async Task<ActionResult<AuthResponse>> Register(RegisterRequest req)
     {
+        if (!_config.GetValue("Auth:AllowRegistration", true) && _users.Users.Any())
+            return BadRequest(new ApiProblem("Kayıt kapalı. Hesap için yöneticinize başvurun."));
+
         var user = new AppUser { UserName = req.Username?.Trim(), Email = req.Email?.Trim() };
         var result = await _users.CreateAsync(user, req.Password ?? "");
         if (!result.Succeeded)
@@ -51,6 +60,6 @@ public sealed class AuthController : ControllerBase
     {
         var user = await _users.FindByIdAsync(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         if (user is null) return Unauthorized(new ApiProblem("Oturum geçersiz."));
-        return new ProfileResponse(user.UserName!, user.Email, user.CreatedAt);
+        return new ProfileResponse(user.UserName!, user.Email, user.CreatedAt, user.Role, user.CustomerId);
     }
 }

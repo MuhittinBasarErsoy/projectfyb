@@ -109,6 +109,10 @@ builder.Services.AddScoped<TokenService>();
 builder.Services.AddScoped<ResultMaterializer>();
 builder.Services.AddScoped<SearchService>();
 
+// Müşteri modülü
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<FyBlue.Server.Services.Customers.CurrentUser>();
+
 builder.Services.AddHangfire(cfg => cfg
     .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
     .UseSimpleAssemblyNameTypeSerializer()
@@ -184,6 +188,7 @@ await using (var scope = app.Services.CreateAsyncScope())
     {
         await sp.GetRequiredService<AppDbContext>().Database.MigrateAsync();
         await sp.GetRequiredService<EpiasDbContext>().Database.MigrateAsync();
+        await FyBlue.Server.Services.Customers.CustomerModuleSeeder.SeedAsync(sp.GetRequiredService<AppDbContext>());
     }
     catch (Microsoft.Data.SqlClient.SqlException ex)
     {

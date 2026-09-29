@@ -5,6 +5,11 @@ namespace FyBlue.Server.Data;
 public sealed class AppUser : IdentityUser
 {
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    /// <summary><see cref="AppRoles"/>: Consultant (tüm müşteriler) veya Customer (yalnızca <see cref="CustomerId"/>).</summary>
+    public string Role { get; set; } = AppRoles.Consultant;
+    /// <summary>Customer rolündeki kullanıcının bağlı olduğu müşteri.</summary>
+    public int? CustomerId { get; set; }
+    public Customer? Customer { get; set; }
     public OsosCredential? OsosCredential { get; set; }
     public EpiasCredential? EpiasCredential { get; set; }
     public List<SearchHistory> Searches { get; set; } = new();

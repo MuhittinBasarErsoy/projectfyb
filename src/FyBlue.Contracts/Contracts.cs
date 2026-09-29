@@ -8,7 +8,8 @@ public sealed record AppLoginRequest(string Username, string Password);
 
 public sealed record AuthResponse(string Token, DateTime ExpiresAt, string Username);
 
-public sealed record ProfileResponse(string Username, string? Email, DateTime CreatedAt);
+/// <summary>Role: Consultant | Customer. CustomerId: müşteri kullanıcısının bağlı olduğu müşteri.</summary>
+public sealed record ProfileResponse(string Username, string? Email, DateTime CreatedAt, string Role, int? CustomerId);
 
 // ---- Dış hesaplar (OSOS / EPİAŞ ayrı ayrı bağlanır) ----
 
