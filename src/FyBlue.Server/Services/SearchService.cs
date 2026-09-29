@@ -226,7 +226,7 @@ public sealed class SearchService
         return sb.ToString();
     }
 
-    private static string CellValue(JsonElement v) => v.ValueKind switch
+    internal static string CellValue(JsonElement v) => v.ValueKind switch
     {
         JsonValueKind.String => v.GetString() ?? "",
         JsonValueKind.Number => v.GetRawText(),

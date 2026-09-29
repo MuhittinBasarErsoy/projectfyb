@@ -1,3 +1,5 @@
+using FyBlue.Server.Services.Mail;
+using Hangfire.Server;
 using Microsoft.Extensions.Logging;
 using Osos.Core.Weather;
 
@@ -12,23 +14,40 @@ public sealed class JobRunner
     private readonly SearchService _search;
     private readonly OsosSessionService _osos;
     private readonly OpenMeteoClient _meteo;
+    private readonly JobResultMailer _mailer;
     private readonly ILogger<JobRunner> _logger;
 
-    public JobRunner(SearchService search, OsosSessionService osos, OpenMeteoClient meteo, ILogger<JobRunner> logger)
+    public JobRunner(SearchService search, OsosSessionService osos, OpenMeteoClient meteo, JobResultMailer mailer, ILogger<JobRunner> logger)
     {
         _search = search;
         _osos = osos;
         _meteo = meteo;
+        _mailer = mailer;
         _logger = logger;
     }
+
+    private static readonly Dictionary<string, string> ScreenLabels = new()
+    {
+        ["Consumption"] = "Tüketim", ["Endex"] = "Endeks", ["Profiles"] = "Yük profili",
+        ["Subscriptions"] = "Tesisatlar", ["Dashboard"] = "Dashboard",
+    };
+
+    /// <summary>Mail alıcısı olmadan oluşturulmuş (eski) işler için — Hangfire'da kayıtlı imza korunur.</summary>
+    public Task RunQueryAsync(string appUserId, string screen, long serno, int daysBack, int type)
+        => RunQueryAsync(appUserId, screen, serno, daysBack, type, null, null);
 
     /// <summary>
     /// Sorguyu çalıştırır. serno=0 → Otomatik: müşterinin tüm tesisatları; serno>0 → yalnızca o tesisat.
     /// Sorgu sayfasıyla aynı parametre şekli: Serno = müşteri, Selected = tesisat(lar).
     /// daysBack: bitiş = şimdi, başlangıç = şimdi - daysBack gün (zamanlı işlerde kayan aralık).
+    /// notifyEmails: sonuç (özet + CSV) bu adreslere mail atılır; hata maili yalnızca ilk denemede gider.
+    /// context: Hangfire doldurur (çağrıda null verilir).
     /// </summary>
-    public async Task RunQueryAsync(string appUserId, string screen, long serno, int daysBack, int type)
+    public async Task RunQueryAsync(string appUserId, string screen, long serno, int daysBack, int type,
+        string? notifyEmails, PerformContext? context)
     {
+        var recipients = SmtpMailSender.ParseRecipients(notifyEmails);
+        string label = ScreenLabels.GetValueOrDefault(screen, screen);
         var ct = CancellationToken.None;
         var end = DateTime.Now;
         var start = end.AddDays(-Math.Max(0, daysBack));
@@ -41,6 +60,7 @@ public sealed class JobRunner
             var res = await _search.RunScreenAsync(appUserId, screen, mainSerno, start, end, type, selected, ct);
             _logger.LogInformation("Job çalıştı: {Screen} user={User} serno={Serno} satır={Rows} geçmiş#{Id}",
                 screen, appUserId, serno, res.RowCount, res.SearchHistoryId);
+            await _mailer.SendResultAsync(appUserId, label, res.SearchHistoryId, res.RowCount, start, end, recipients, ct);
         }
         catch (Exception ex)
         {
@@ -51,6 +71,8 @@ public sealed class JobRunner
                     serno > 0 ? serno : null, start, end, ex.Message, ct);
             }
             catch (Exception saveEx) { _logger.LogWarning(saveEx, "Job hatası geçmişe yazılamadı"); }
+            if ((context?.GetJobParameter<int?>("RetryCount") ?? 0) == 0)
+                await _mailer.SendFailureAsync(label, ex.Message, recipients, ct);
             throw; // Hangfire yeniden denesin / dashboard'da görünsün
         }
     }

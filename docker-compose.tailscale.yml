@@ -68,6 +68,12 @@ services:
       ExposeApiDocs: ${EXPOSE_API_DOCS:-false}
       Auth__AllowRegistration: ${ALLOW_REGISTRATION:-true}
       Storage__FilesPath: /var/lib/fyblue/files
+      Smtp__Host: ${SMTP_HOST:-}
+      Smtp__Port: ${SMTP_PORT:-587}
+      Smtp__User: ${SMTP_USER:-}
+      Smtp__Password: ${SMTP_PASSWORD:-}
+      Smtp__From: ${SMTP_FROM:-}
+      Smtp__Security: ${SMTP_SECURITY:-Auto}
       TZ: Europe/Istanbul
     volumes:
       # Data Protection anahtarları: silinirse saklanan OSOS/EPİAŞ şifreleri çözülemez.

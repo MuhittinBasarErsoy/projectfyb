@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Osos.Contracts;
 using FyBlue.Server.Services;
+using FyBlue.Server.Services.Mail;
 
 namespace FyBlue.Server.Controllers;
 
@@ -29,8 +30,10 @@ public sealed class JobsController : ControllerBase
     [HttpPost("run-now")]
     public IActionResult RunNow(RunNowRequest req)
     {
+        if (InvalidEmails(req.NotifyEmails) is { } bad) return bad;
         var uid = Uid;
-        string id = _jobs.Enqueue<JobRunner>(r => r.RunQueryAsync(uid, req.Screen, req.Serno, req.DaysBack, req.Type));
+        string? emails = Normalize(req.NotifyEmails);
+        string id = _jobs.Enqueue<JobRunner>(r => r.RunQueryAsync(uid, req.Screen, req.Serno, req.DaysBack, req.Type, emails, null));
         return Ok(new { jobId = id, message = "İş kuyruğa alındı." });
     }
 
@@ -40,6 +43,8 @@ public sealed class JobsController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(req.Cron))
             return BadRequest(new { message = "Cron ifadesi gerekli." });
+        if (InvalidEmails(req.NotifyEmails) is { } bad) return bad;
+        string? emails = Normalize(req.NotifyEmails);
 
         string slug = string.IsNullOrWhiteSpace(req.Name) ? Guid.NewGuid().ToString("N")[..8] : Sanitize(req.Name!);
         string id = $"{Prefix}{req.Screen}:{slug}";
@@ -47,7 +52,7 @@ public sealed class JobsController : ControllerBase
 
         _recurring.AddOrUpdate<JobRunner>(
             id,
-            r => r.RunQueryAsync(uid, req.Screen, req.Serno, req.DaysBack, req.Type),
+            r => r.RunQueryAsync(uid, req.Screen, req.Serno, req.DaysBack, req.Type, emails, null),
             req.Cron,
             new RecurringJobOptions { TimeZone = TimeZoneInfo.Local });
 
@@ -92,10 +97,29 @@ public sealed class JobsController : ControllerBase
                     j.Id, screen, serno, daysBack, j.Cron,
                     j.NextExecution?.ToLocalTime().ToString("dd.MM.yyyy HH:mm"),
                     j.LastExecution?.ToLocalTime().ToString("dd.MM.yyyy HH:mm"),
-                    j.LastJobState);
+                    j.LastJobState,
+                    isWeather ? null : ArgString(j, 5));
             })
             .ToList();
         return jobs;
+    }
+
+    private static string? ArgString(RecurringJobDto j, int index)
+    {
+        var args = j.Job?.Args;
+        return args is not null && args.Count > index ? args[index] as string : null;
+    }
+
+    private BadRequestObjectResult? InvalidEmails(string? list)
+    {
+        try { SmtpMailSender.ParseRecipients(list); return null; }
+        catch (FormatException ex) { return BadRequest(new { message = ex.Message }); }
+    }
+
+    private static string? Normalize(string? list)
+    {
+        var r = SmtpMailSender.ParseRecipients(list);
+        return r.Count == 0 ? null : string.Join(", ", r);
     }
 
     private static int ArgInt(RecurringJobDto j, int index)
@@ -129,7 +153,7 @@ public sealed class JobsController : ControllerBase
 
     private static (string screen, long serno, int daysBack) ParseArgs(RecurringJobDto j)
     {
-        // Job argümanları: RunQueryAsync(appUserId, screen, serno, daysBack, type)
+        // Job argümanları: RunQueryAsync(appUserId, screen, serno, daysBack, type[, notifyEmails, context])
         try
         {
             var args = System.Text.Json.JsonDocument.Parse(j.Job?.Args is null ? "[]"

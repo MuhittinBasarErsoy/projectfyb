@@ -109,6 +109,11 @@ builder.Services.AddScoped<TokenService>();
 builder.Services.AddScoped<ResultMaterializer>();
 builder.Services.AddScoped<SearchService>();
 
+// İş sonuçlarını e-postayla gönderme (Smtp bölümü; Host boşsa kapalı)
+builder.Services.AddSingleton(builder.Configuration.GetSection("Smtp").Get<FyBlue.Server.Services.Mail.SmtpOptions>() ?? new());
+builder.Services.AddSingleton<FyBlue.Server.Services.Mail.IMailSender, FyBlue.Server.Services.Mail.SmtpMailSender>();
+builder.Services.AddScoped<FyBlue.Server.Services.Mail.JobResultMailer>();
+
 // Müşteri modülü
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<FyBlue.Server.Services.Customers.CurrentUser>();
