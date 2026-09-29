@@ -21,8 +21,10 @@ import {
   History,
   LayoutDashboard,
   Layers,
+  Building2,
   Link2,
   Search,
+  SlidersHorizontal,
   UserRound,
   type LucideIcon,
 } from "lucide-react";
@@ -41,6 +43,8 @@ export const NAV_ICONS: Record<NavIcon, LucideIcon> = {
   function: FunctionSquare,
   link: Link2,
   user: UserRound,
+  building: Building2,
+  sliders: SlidersHorizontal,
 };
 
 export function RequireAuth({ children }: { children: ReactNode }) {

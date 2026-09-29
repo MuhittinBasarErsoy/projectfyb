@@ -15,7 +15,9 @@ const ICON: Record<NavIcon, keyof typeof Icons> = {
   layers: 'layers',
   function: 'formula',
   link: 'plug',
-  user: 'profile'
+  user: 'profile',
+  building: 'teams',
+  sliders: 'settings'
 };
 
 // Cmd+K kısayolları (iki harf art arda)

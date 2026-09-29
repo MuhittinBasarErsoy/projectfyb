@@ -1,6 +1,8 @@
 // Kabukla ilgili parçalar: logo, menü ikonları, oturum koruması, hesap kapısı, şablon seçici.
 
 import {
+  SettingsAltIcon,
+  MultiUserIcon,
   BoltIcon,
   ClockIcon,
   DataBaseIcon,
@@ -40,6 +42,8 @@ export function NavGlyph({ icon, className }: { icon: NavIcon; className?: strin
     function: TaskIcon,
     link: PlugInIcon,
     user: UserCircleIcon,
+    building: MultiUserIcon,
+    sliders: SettingsAltIcon,
   } as const;
   const Icon = map[icon];
   return <Icon className={className} />;

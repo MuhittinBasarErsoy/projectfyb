@@ -845,6 +845,8 @@ export function useParametersAdmin() {
     busy,
     notice,
     canEdit: user.isConsultant,
+    /** Rol yüklendikten sonra danışman değilse (uyarı rol yüklenirken yanıp sönmesin). */
+    readOnly: user.loaded && !user.isConsultant,
   };
 }
 
