@@ -1,5 +1,6 @@
 // Ekranlarda ortak kullanılan Türkçe etiketler, menü yapısı ve seçenek listeleri.
 
+import type { CustomerOsosKind, GenerationType, InstallationType, UserRole } from "./customerTypes";
 import type { AlignmentMode, OsosScreen } from "./types";
 
 // ---- Menü ----
@@ -14,7 +15,9 @@ export type NavIcon =
   | "layers"
   | "function"
   | "link"
-  | "user";
+  | "user"
+  | "building"
+  | "sliders";
 
 export interface NavItem {
   title: string;
@@ -22,19 +25,25 @@ export interface NavItem {
   icon: NavIcon;
   /** Yalnızca tam eşleşmede aktif (alt yolları olan sayfalar için). */
   exact?: boolean;
+  /** Yalnızca danışmanlara gösterilir. */
+  consultantOnly?: boolean;
 }
 
 export interface NavGroup {
-  id: "main" | "osos" | "epias" | "settings";
+  id: "main" | "customers" | "osos" | "epias" | "settings";
+  /** Yalnızca danışmanlara gösterilir (müşteri kullanıcısı kendi müşteri sayfasını görür). */
+  consultantOnly?: boolean;
   title: string;
   items: NavItem[];
 }
 
 export const NAV: NavGroup[] = [
   { id: "main", title: "Menü", items: [{ title: "Genel Bakış", path: "/", icon: "home", exact: true }] },
+  { id: "customers", title: "Müşteriler", items: [{ title: "Müşteriler", path: "/customers", icon: "building" }] },
   {
     id: "osos",
     title: "OSOS",
+    consultantOnly: true,
     items: [
       { title: "Sorgu", path: "/osos/query", icon: "search" },
       { title: "Geçmiş", path: "/osos/history", icon: "history" },
@@ -45,6 +54,7 @@ export const NAV: NavGroup[] = [
   {
     id: "epias",
     title: "EPİAŞ",
+    consultantOnly: true,
     items: [
       { title: "Özet", path: "/epias", icon: "gauge", exact: true },
       { title: "Servisler", path: "/epias/endpoints", icon: "layers" },
@@ -55,11 +65,30 @@ export const NAV: NavGroup[] = [
     id: "settings",
     title: "Ayarlar",
     items: [
-      { title: "Bağlı Hesaplar", path: "/settings/connections", icon: "link" },
+      { title: "Bağlı Hesaplar", path: "/settings/connections", icon: "link", consultantOnly: true },
+      { title: "Parametreler", path: "/settings/parameters", icon: "sliders", consultantOnly: true },
       { title: "Profil", path: "/settings/profile", icon: "user" },
     ],
   },
 ];
+
+/**
+ * Role göre menü. Rol henüz bilinmiyorsa (null) danışman menüsü gösterilir; müşteri kullanıcısı
+ * OSOS/EPİAŞ ekranlarını görmez, "Müşteriler" yerine doğrudan kendi müşteri sayfasına gider.
+ */
+export function navFor(role: UserRole | null, customerId?: number | null): NavGroup[] {
+  if (role !== "Customer") return NAV;
+  return NAV.filter((g) => !g.consultantOnly)
+    .map((g) => ({
+      ...g,
+      items: g.items
+        .filter((i) => !i.consultantOnly)
+        .map((i) =>
+          i.path === "/customers" && customerId ? { ...i, title: "Firma Bilgilerim", path: `/customers/${customerId}` } : i,
+        ),
+    }))
+    .filter((g) => g.items.length > 0);
+}
 
 export function isNavActive(item: NavItem, pathname: string): boolean {
   const p = pathname.replace(/\/+$/, "") || "/";
@@ -231,4 +260,84 @@ export const PAGE_TEXT = {
       "OSOS ve EPİAŞ, FyBlue girişinizden bağımsız kendi kullanıcı adı/şifreleriyle çalışır. Şifreler sunucuda şifrelenmiş olarak saklanır.",
   },
   profile: { title: "Profil", subtitle: "FyBlue hesabınız. OSOS ve EPİAŞ bağlantıları bu hesaba aittir." },
+} as const;
+
+// ---- Müşteri modülü ----
+
+export const INSTALLATION_TYPES: { value: InstallationType; label: string }[] = [
+  { value: "CONSUMPTION", label: "Tüketim" },
+  { value: "PRODUCTION", label: "Üretim" },
+  { value: "PRODUCTION_CONSUMPTION", label: "Üretim + Tüketim" },
+];
+
+export const GENERATION_TYPES: { value: GenerationType; label: string }[] = [
+  { value: "SOLAR", label: "GES (Güneş)" },
+  { value: "WIND", label: "RES (Rüzgâr)" },
+  { value: "HYDRO", label: "HES (Hidroelektrik)" },
+  { value: "GEOTHERMAL", label: "JES (Jeotermal)" },
+  { value: "COGENERATION", label: "Kojenerasyon" },
+  { value: "OTHER", label: "Diğer" },
+];
+
+export const PLANT_SUBTYPES: { value: string; label: string }[] = [
+  { value: "ROOFTOP", label: "Çatı" },
+  { value: "GROUND", label: "Arazi" },
+  { value: "CARPORT", label: "Otopark (carport)" },
+  { value: "FACADE", label: "Cephe" },
+  { value: "OTHER", label: "Diğer" },
+];
+
+const labelOf = (list: { value: string; label: string }[], v?: string | null) =>
+  (v && list.find((x) => x.value === v)?.label) || v || "—";
+export const installationTypeLabel = (v?: string | null) => labelOf(INSTALLATION_TYPES, v);
+export const generationTypeLabel = (v?: string | null) => labelOf(GENERATION_TYPES, v);
+export const plantSubtypeLabel = (v?: string | null) => labelOf(PLANT_SUBTYPES, v);
+export const hasProduction = (t?: string | null) => t === "PRODUCTION" || t === "PRODUCTION_CONSUMPTION";
+
+export type CustomerTab =
+  | "summary"
+  | "installations"
+  | "consumption"
+  | "production"
+  | "endex"
+  | "documents"
+  | "invoices"
+  | "osos"
+  | "users";
+
+/** Müşteri detay sekmeleri; ilk açılış Özet. Kullanıcılar sekmesi yalnızca danışmanda. */
+export const CUSTOMER_TABS: { key: CustomerTab; label: string; consultantOnly?: boolean }[] = [
+  { key: "summary", label: "Özet" },
+  { key: "installations", label: "Tesisatlar" },
+  { key: "consumption", label: "Tüketim" },
+  { key: "production", label: "Üretim" },
+  { key: "endex", label: "Endeksler" },
+  { key: "documents", label: "Belgeler" },
+  { key: "invoices", label: "Faturalar" },
+  { key: "osos", label: "OSOS / Entegrasyon" },
+  { key: "users", label: "Kullanıcılar", consultantOnly: true },
+];
+
+export const CUSTOMER_OSOS_TABS: Record<"consumption" | "production" | "endex", { kind: CustomerOsosKind; title: string; hint: string }> = {
+  consumption: { kind: "consumption", title: "Tüketim", hint: "Müşterinin tüm OSOS aboneliklerinden tüketim verisi (canlı sorgu)." },
+  production: { kind: "production", title: "Üretim", hint: "Üretim tesisatlarına eşleşmiş aboneliklerin verisi. Tip: OSOS tüketim/üretim yönü." },
+  endex: { kind: "endex", title: "Endeksler", hint: "Aboneliklerin güncel endeks okumaları." },
+};
+
+export const INVOICE_DOCUMENT_TYPE = "FATURA";
+
+export const PARAMETER_GROUP_HINTS: Record<string, string> = {
+  DOCUMENT_TYPE: "Belge yüklerken seçilen tipler. 'Fatura' sistem kaydıdır ve Faturalar sekmesini besler.",
+  DISTRIBUTION_COMPANY: "Tesisat ve OSOS bağlantılarında seçilen dağıtım şirketleri.",
+  PANEL_BRAND: "GES panel markaları (öneri listesi).",
+  INVERTER_BRAND: "İnverter markaları (öneri listesi).",
+  METER_BRAND: "Sayaç markaları.",
+};
+
+export const CUSTOMER_PAGE_TEXT = {
+  list: { title: "Müşteriler", subtitle: "Müşteri kartları, tesisatlar, OSOS bağlantıları ve belgeler." },
+  parameters: {
+    title: "Parametreler",
+    subtitle: "Belge tipleri, dağıtım şirketleri ve marka listeleri. Kullanılan kayıtlar silinmez, pasife alınır.",
+  },
 } as const;

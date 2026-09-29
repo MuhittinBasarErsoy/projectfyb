@@ -312,6 +312,7 @@ export function useJobs() {
   const [cronPreset, setCronPreset] = useState("");
   const [customCron, setCustomCron] = useState("");
   const [name, setName] = useState("");
+  const [notifyEmails, setNotifyEmails] = useState("");
   const [lat, setLat] = useState(40.195);
   const [lon, setLon] = useState(29.06);
   const [tz, setTz] = useState("Europe/Istanbul");
@@ -356,7 +357,7 @@ export function useJobs() {
     setNotice(null);
     try {
       if (isWeather) await ososApi.weatherRunNow(weatherReq(null));
-      else await ososApi.runNow({ screen, serno, daysBack, type });
+      else await ososApi.runNow({ screen, serno, daysBack, type, notifyEmails: notifyEmails.trim() || null });
       setNotice({ ok: true, text: "İş kuyruğa alındı — birkaç saniye içinde çalışır ve Geçmiş'te görünür." });
     } catch (e) {
       setNotice({ ok: false, text: errorMessage(e) });
@@ -370,7 +371,16 @@ export function useJobs() {
     setNotice(null);
     try {
       if (isWeather) await ososApi.weatherSchedule(weatherReq(effectiveCron));
-      else await ososApi.schedule({ screen, serno, daysBack, type, cron: effectiveCron, name: name || null });
+      else
+        await ososApi.schedule({
+          screen,
+          serno,
+          daysBack,
+          type,
+          cron: effectiveCron,
+          name: name || null,
+          notifyEmails: notifyEmails.trim() || null,
+        });
       setNotice({ ok: true, text: "Zamanlanmış iş oluşturuldu." });
       await load();
     } catch (e) {
@@ -416,6 +426,9 @@ export function useJobs() {
     effectiveCron,
     name,
     setName,
+    /** Sonuç maili alıcıları (virgülle ayrılmış; hava durumu işlerinde yok). */
+    notifyEmails,
+    setNotifyEmails,
     lat,
     setLat,
     lon,

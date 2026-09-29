@@ -13,6 +13,9 @@ export interface ProfileResponse {
   username: string;
   email?: string | null;
   createdAt: string;
+  /** Consultant: tüm müşteriler; Customer: yalnızca customerId. */
+  role: import("./customerTypes").UserRole;
+  customerId?: number | null;
 }
 
 export interface ExternalAccountStatus {
@@ -81,6 +84,8 @@ export interface JobDto {
   nextRun?: string | null;
   lastRun?: string | null;
   lastState?: string | null;
+  /** Sonuç maili alıcıları (virgülle ayrılmış). */
+  notifyEmails?: string | null;
 }
 
 export interface RunNowRequest {
@@ -88,6 +93,7 @@ export interface RunNowRequest {
   serno: number;
   daysBack: number;
   type: number;
+  notifyEmails?: string | null;
 }
 
 export interface ScheduleJobRequest extends RunNowRequest {
