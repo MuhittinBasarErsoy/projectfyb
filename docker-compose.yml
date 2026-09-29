@@ -32,6 +32,8 @@ services:
       Hangfire__User: "${HANGFIRE_USER:-admin}"
       Hangfire__Password: "${HANGFIRE_PASSWORD:-}"
       ExposeApiDocs: "${EXPOSE_API_DOCS:-false}"
+      # Sorgu tarih aralığı (DateTime.Now) ve cron zamanlaması yerel saate göre çalışır.
+      TZ: Europe/Istanbul
     ports:
       - "8080:8080"
     volumes:

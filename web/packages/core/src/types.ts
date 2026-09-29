@@ -54,6 +54,8 @@ export interface SearchHistoryDto {
   endDate?: string | null;
   rowCount?: number | null;
   createdAt: string;
+  /** Zamanlanmış iş başarısız olduysa hata mesajı (sonuç yok). */
+  error?: string | null;
 }
 
 export interface SearchResultDto {

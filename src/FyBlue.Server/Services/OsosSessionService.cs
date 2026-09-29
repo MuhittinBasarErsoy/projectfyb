@@ -24,6 +24,8 @@ public sealed class OsosSessionService
         public required HttpClient Http { get; init; }
         public long CustomerSerno { get; init; }
         public string? SubscriptionsJson { get; init; }
+        /// <summary>GetCustomerPortalSubscriptions yanıtı (oturum süresince önbellek).</summary>
+        public string? PortalSubscriptionsJson { get; set; }
         public DateTime EstablishedAt { get; init; } = DateTime.UtcNow;
     }
 
@@ -104,6 +106,25 @@ public sealed class OsosSessionService
         var s = _sessions[appUserId];
         return (s.CustomerSerno, s.SubscriptionsJson);
     }
+
+    /// <summary>
+    /// Zengin tesisat listesi (ünvan/adres/tarife vb.) — login yanıtında değil GetCustomerPortalSubscriptions'ta gelir.
+    /// Oturum süresince önbelleklenir.
+    /// </summary>
+    public async Task<string> GetPortalSubscriptionsJsonAsync(string appUserId, CancellationToken ct)
+    {
+        await EnsureSessionAsync(appUserId, ct);
+        var s = _sessions[appUserId];
+        if (s.PortalSubscriptionsJson is { } cached) return cached;
+        string json = await s.Client.CallAsync(s.SessionKey, OsosMethods.GetCustomerPortalSubscriptions,
+            new { Serno = s.CustomerSerno, PageSize = 1000, PageNumber = 1 }, ct);
+        s.PortalSubscriptionsJson = json;
+        return json;
+    }
+
+    /// <summary>Kullanıcının tüm tesisat Serno'ları ("Otomatik / tümü" sorgularında Selected olarak gönderilir).</summary>
+    public async Task<long[]> GetSubscriptionSernosAsync(string appUserId, CancellationToken ct)
+        => OsosSubscriptions.ExtractSernos(await GetPortalSubscriptionsJsonAsync(appUserId, ct));
 
     /// <summary>Kullanıcının oturumuyla bir MethodName çağırır; çözülmüş JSON döner.</summary>
     public async Task<string> CallAsync(string appUserId, string methodName, object? parameters, CancellationToken ct)

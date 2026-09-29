@@ -70,7 +70,7 @@ export default function History() {
                   <Td>
                     {fmtShortDate(row.startDate)}–{fmtShortDate(row.endDate)}
                   </Td>
-                  <Td num>{row.rowCount}</Td>
+                  <Td num>{row.error ? <span className="text-destructive" title={row.error}>Hata</span> : row.rowCount}</Td>
                   <Td>{fmtShortDateTime(row.createdAt)}</Td>
                   <Td className="text-right">
                     <div className="inline-flex gap-0.5">

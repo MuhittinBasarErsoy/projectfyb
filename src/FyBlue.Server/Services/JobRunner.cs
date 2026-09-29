@@ -23,24 +23,34 @@ public sealed class JobRunner
     }
 
     /// <summary>
-    /// Sorguyu çalıştırır. serno=0 ise müşteri Serno'su otomatik kullanılır.
+    /// Sorguyu çalıştırır. serno=0 → Otomatik: müşterinin tüm tesisatları; serno>0 → yalnızca o tesisat.
+    /// Sorgu sayfasıyla aynı parametre şekli: Serno = müşteri, Selected = tesisat(lar).
     /// daysBack: bitiş = şimdi, başlangıç = şimdi - daysBack gün (zamanlı işlerde kayan aralık).
     /// </summary>
     public async Task RunQueryAsync(string appUserId, string screen, long serno, int daysBack, int type)
     {
         var ct = CancellationToken.None;
+        var end = DateTime.Now;
+        var start = end.AddDays(-Math.Max(0, daysBack));
         try
         {
-            long effectiveSerno = serno > 0 ? serno : await _osos.GetCustomerSernoAsync(appUserId, ct);
-            var end = DateTime.Now;
-            var start = end.AddDays(-Math.Max(0, daysBack));
-            var res = await _search.RunScreenAsync(appUserId, screen, effectiveSerno, start, end, type, null, ct);
+            long customerSerno = await _osos.GetCustomerSernoAsync(appUserId, ct);
+            // Dashboard (GetOwnerConsumptions) tek bir owner Serno'su alır; Selected kullanmaz.
+            long mainSerno = screen == "Dashboard" && serno > 0 ? serno : customerSerno;
+            long[]? selected = serno > 0 ? [serno] : null;
+            var res = await _search.RunScreenAsync(appUserId, screen, mainSerno, start, end, type, selected, ct);
             _logger.LogInformation("Job çalıştı: {Screen} user={User} serno={Serno} satır={Rows} geçmiş#{Id}",
-                screen, appUserId, effectiveSerno, res.RowCount, res.SearchHistoryId);
+                screen, appUserId, serno, res.RowCount, res.SearchHistoryId);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Job hatası: {Screen} user={User}", screen, appUserId);
+            try
+            {
+                await _search.SaveFailureAsync(appUserId, screen, new { screen, serno, daysBack, type },
+                    serno > 0 ? serno : null, start, end, ex.Message, ct);
+            }
+            catch (Exception saveEx) { _logger.LogWarning(saveEx, "Job hatası geçmişe yazılamadı"); }
             throw; // Hangfire yeniden denesin / dashboard'da görünsün
         }
     }

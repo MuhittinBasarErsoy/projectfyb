@@ -52,6 +52,8 @@ public sealed class SearchHistory
     public DateTime? StartDate { get; set; }
     public DateTime? EndDate { get; set; }
     public int? RowCount { get; set; }
+    /// <summary>Zamanlanmış iş başarısız olduysa hata mesajı (snapshot yok).</summary>
+    public string? Error { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public SearchResultSnapshot? Snapshot { get; set; }

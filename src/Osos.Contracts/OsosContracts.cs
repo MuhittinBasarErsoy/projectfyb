@@ -8,7 +8,7 @@ public abstract record OsosQueryBase
     public long Serno { get; init; }
     public DateTime StartDate { get; init; }
     public DateTime EndDate { get; init; }
-    /// <summary>Seçili tesisat Serno'ları; boş = tümü.</summary>
+    /// <summary>Seçili tesisat Serno'ları; boş = tümü (sunucu tüm tesisat Serno'larını gönderir).</summary>
     public long[]? Selected { get; init; }
     public int TotalItemCount { get; init; }
 }
@@ -63,7 +63,8 @@ public sealed record SearchHistoryDto(
     DateTime? StartDate,
     DateTime? EndDate,
     int? RowCount,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    string? Error = null);
 
 public sealed record SearchResultDto(long SearchHistoryId, string ResultJson, int RowCount, DateTime CapturedAt);
 
