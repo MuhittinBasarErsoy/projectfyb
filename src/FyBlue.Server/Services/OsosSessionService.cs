@@ -24,6 +24,8 @@ public sealed class OsosSessionService
         public required HttpClient Http { get; init; }
         public long CustomerSerno { get; init; }
         public string? SubscriptionsJson { get; init; }
+        /// <summary>GetCustomerPortalSubscriptions yanıtı (oturum süresince önbellek).</summary>
+        public string? PortalSubscriptionsJson { get; set; }
         public DateTime EstablishedAt { get; init; } = DateTime.UtcNow;
     }
 
@@ -57,7 +59,15 @@ public sealed class OsosSessionService
         finally { http.Dispose(); }
     }
 
-    /// <summary>Kullanıcı için geçerli bir oturum sağlar (gerekirse yeniden login).</summary>
+    private const string ConnectionPrefix = "conn:";
+
+    /// <summary>
+    /// Müşteri modülündeki bir OSOS bağlantısının (osos_connections) oturum anahtarı. Bu servisteki
+    /// appUserId alan tüm metodlara verilebilir: kimlik, kullanıcının bağlı hesabı yerine bağlantıdan okunur.
+    /// </summary>
+    public static string ConnectionKey(int ososConnectionId) => ConnectionPrefix + ososConnectionId;
+
+    /// <summary>Kullanıcı (veya <see cref="ConnectionKey"/>) için geçerli bir oturum sağlar (gerekirse yeniden login).</summary>
     public async Task<string> EnsureSessionAsync(string appUserId, CancellationToken ct)
     {
         if (_sessions.TryGetValue(appUserId, out var s) && DateTime.UtcNow - s.EstablishedAt < SessionTtl)
@@ -65,12 +75,25 @@ public sealed class OsosSessionService
 
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var cred = await db.OsosCredentials.AsNoTracking().FirstOrDefaultAsync(c => c.AppUserId == appUserId, ct)
-                   ?? throw new OsosNotLinkedException();
+        string userCode, protectedPassword;
+        bool rememberMe = false;
+        if (appUserId.StartsWith(ConnectionPrefix, StringComparison.Ordinal))
+        {
+            int id = int.Parse(appUserId[ConnectionPrefix.Length..]);
+            var conn = await db.OsosConnections.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id, ct)
+                       ?? throw new InvalidOperationException("OSOS bağlantısı bulunamadı.");
+            (userCode, protectedPassword) = (conn.Username, conn.EncryptedPassword);
+        }
+        else
+        {
+            var cred = await db.OsosCredentials.AsNoTracking().FirstOrDefaultAsync(c => c.AppUserId == appUserId, ct)
+                       ?? throw new OsosNotLinkedException();
+            (userCode, protectedPassword, rememberMe) = (cred.OsosUserCode, cred.OsosPasswordProtected, cred.RememberMe);
+        }
 
-        string password = Unprotect(cred.OsosPasswordProtected);
+        string password = Unprotect(protectedPassword);
         var (client, http) = CreateClient();
-        var resp = await client.LoginAsync(cred.OsosUserCode, password, rememberMe: cred.RememberMe, ct: ct);
+        var resp = await client.LoginAsync(userCode, password, rememberMe: rememberMe, ct: ct);
         if (string.IsNullOrWhiteSpace(resp.SessionKey))
         {
             http.Dispose();
@@ -104,6 +127,25 @@ public sealed class OsosSessionService
         var s = _sessions[appUserId];
         return (s.CustomerSerno, s.SubscriptionsJson);
     }
+
+    /// <summary>
+    /// Zengin tesisat listesi (ünvan/adres/tarife vb.) — login yanıtında değil GetCustomerPortalSubscriptions'ta gelir.
+    /// Oturum süresince önbelleklenir.
+    /// </summary>
+    public async Task<string> GetPortalSubscriptionsJsonAsync(string appUserId, CancellationToken ct)
+    {
+        await EnsureSessionAsync(appUserId, ct);
+        var s = _sessions[appUserId];
+        if (s.PortalSubscriptionsJson is { } cached) return cached;
+        string json = await s.Client.CallAsync(s.SessionKey, OsosMethods.GetCustomerPortalSubscriptions,
+            new { Serno = s.CustomerSerno, PageSize = 1000, PageNumber = 1 }, ct);
+        s.PortalSubscriptionsJson = json;
+        return json;
+    }
+
+    /// <summary>Kullanıcının tüm tesisat Serno'ları ("Otomatik / tümü" sorgularında Selected olarak gönderilir).</summary>
+    public async Task<long[]> GetSubscriptionSernosAsync(string appUserId, CancellationToken ct)
+        => OsosSubscriptions.ExtractSernos(await GetPortalSubscriptionsJsonAsync(appUserId, ct));
 
     /// <summary>Kullanıcının oturumuyla bir MethodName çağırır; çözülmüş JSON döner.</summary>
     public async Task<string> CallAsync(string appUserId, string methodName, object? parameters, CancellationToken ct)

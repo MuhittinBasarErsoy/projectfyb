@@ -102,34 +102,12 @@ public sealed class OsosController : ControllerBase
         try
         {
             long serno = await _osos.GetCustomerSernoAsync(Uid, ct);
-            // Zengin tesisat listesi login yanıtında değil, bu serviste gelir (ünvan/adres/tarife vb.).
-            string json = await _osos.CallAsync(Uid, OsosMethods.GetCustomerPortalSubscriptions,
-                new { Serno = serno, PageSize = 1000, PageNumber = 1 }, ct);
+            string json = await _osos.GetPortalSubscriptionsJsonAsync(Uid, ct);
             using var doc = System.Text.Json.JsonDocument.Parse(json);
-            var arr = FindFirstObjectArray(doc.RootElement);
+            var arr = OsosSubscriptions.FindFirstObjectArray(doc.RootElement);
             return Ok(new { serno, subscriptions = arr?.Clone() ?? default });
         }
         catch (InvalidOperationException ex) when (ex is not OsosNotLinkedException) { return BadRequest(new { message = ex.Message }); }
-    }
-
-    // Yanıttaki ilk obje dizisini bulur (esb sarmalayıcısının içinde olabilir).
-    private static System.Text.Json.JsonElement? FindFirstObjectArray(System.Text.Json.JsonElement el)
-    {
-        switch (el.ValueKind)
-        {
-            case System.Text.Json.JsonValueKind.Array:
-                foreach (var i in el.EnumerateArray())
-                    if (i.ValueKind == System.Text.Json.JsonValueKind.Object) return el;
-                return null;
-            case System.Text.Json.JsonValueKind.Object:
-                foreach (var p in el.EnumerateObject())
-                {
-                    var r = FindFirstObjectArray(p.Value);
-                    if (r is not null) return r;
-                }
-                return null;
-            default: return null;
-        }
     }
 
     /// <summary>Serno verilmemişse (<=0) müşteri Serno'sunu kullan.</summary>
@@ -145,7 +123,7 @@ public sealed class OsosController : ControllerBase
             Serno = serno,
             StartDate = D(q.StartDate),
             EndDate = D(q.EndDate),
-            Selected = q.Selected ?? Array.Empty<long>(),
+            Selected = await _search.ResolveSelectedAsync(Uid, q.Selected, ct),
             Type = q.Type,
             Period = q.Period,
             MarkFilterString = (string?)null,
@@ -163,7 +141,7 @@ public sealed class OsosController : ControllerBase
             Serno = serno,
             StartDate = D(q.StartDate),
             EndDate = D(q.EndDate),
-            Selected = q.Selected ?? Array.Empty<long>(),
+            Selected = await _search.ResolveSelectedAsync(Uid, q.Selected, ct),
             MarkFilterString = (string?)null,
             TitleFilterString = (string?)null,
             TotalItemCount = q.TotalItemCount
@@ -179,7 +157,7 @@ public sealed class OsosController : ControllerBase
             Serno = serno,
             StartDate = D(q.StartDate),
             EndDate = D(q.EndDate),
-            Selected = q.Selected ?? Array.Empty<long>(),
+            Selected = await _search.ResolveSelectedAsync(Uid, q.Selected, ct),
             MarkFilterString = (string?)null,
             TitleFilterString = (string?)null,
             TotalItemCount = q.TotalItemCount,

@@ -31,6 +31,27 @@ import type {
   WeatherQuery,
 } from "./types";
 
+import type {
+  CustomerDto,
+  CustomerListItem,
+  CustomerOsosKind,
+  CustomerOsosResult,
+  CustomerSaveRequest,
+  CustomerSummaryDto,
+  CustomerUserDto,
+  DocumentDto,
+  DocumentUpload,
+  InstallationDto,
+  InstallationSaveRequest,
+  OsosConnectionDto,
+  OsosConnectionSaveRequest,
+  OsosSubscriptionDto,
+  OsosSyncResult,
+  ParameterGroupDto,
+  ParameterValueDto,
+  ParameterValueSaveRequest,
+} from "./customerTypes";
+
 const enc = encodeURIComponent;
 
 export const authApi = {
@@ -123,4 +144,82 @@ export const epiasApi = {
   runFormula: (req: FormulaRunRequest) =>
     http.postAllowingResultErrors<FormulaRunResult>("api/epias/formulas/run", req),
   deleteFormula: (id: number) => http.del(`api/epias/formulas/${id}`),
+};
+
+// ---- Müşteri modülü ----
+
+export const customersApi = {
+  list: (search = "", includeInactive = false) =>
+    http.get<CustomerListItem[]>(`api/customers?search=${enc(search)}&includeInactive=${includeInactive}`),
+  get: (id: number) => http.get<CustomerDto>(`api/customers/${id}`),
+  summary: (id: number) => http.get<CustomerSummaryDto>(`api/customers/${id}/summary`),
+  create: (req: CustomerSaveRequest) => http.post<CustomerDto>("api/customers", req),
+  update: (id: number, req: CustomerSaveRequest) => http.put<CustomerDto>(`api/customers/${id}`, req),
+
+  osos: (id: number, kind: CustomerOsosKind, q: { startDate: string; endDate: string; installationId?: number | null; type?: number }) =>
+    http.post<CustomerOsosResult>(`api/customers/${id}/osos/${kind}`, q),
+
+  users: (id: number) => http.get<CustomerUserDto[]>(`api/customers/${id}/users`),
+  createUser: (id: number, req: { username: string; email?: string | null; password: string }) =>
+    http.post<CustomerUserDto>(`api/customers/${id}/users`, req),
+  deleteUser: (id: number, userId: string) => http.del(`api/customers/${id}/users/${enc(userId)}`),
+
+  installations: (id: number, includeInactive = false) =>
+    http.get<InstallationDto[]>(`api/customers/${id}/installations?includeInactive=${includeInactive}`),
+  createInstallation: (id: number, req: InstallationSaveRequest) =>
+    http.post<InstallationDto>(`api/customers/${id}/installations`, req),
+  updateInstallation: (installationId: number, req: InstallationSaveRequest) =>
+    http.put<InstallationDto>(`api/installations/${installationId}`, req),
+
+  connections: (id: number) => http.get<OsosConnectionDto[]>(`api/customers/${id}/osos-connections`),
+  createConnection: (id: number, req: OsosConnectionSaveRequest) =>
+    http.post<OsosConnectionDto>(`api/customers/${id}/osos-connections`, req),
+  updateConnection: (connectionId: number, req: OsosConnectionSaveRequest) =>
+    http.put<OsosConnectionDto>(`api/osos-connections/${connectionId}`, req),
+  testConnection: (connectionId: number) => http.post<LinkResponse>(`api/osos-connections/${connectionId}/test`),
+  syncConnection: (connectionId: number) => http.post<OsosSyncResult>(`api/osos-connections/${connectionId}/sync`),
+
+  subscriptions: (id: number, includeInactive = false) =>
+    http.get<OsosSubscriptionDto[]>(`api/customers/${id}/osos-subscriptions?includeInactive=${includeInactive}`),
+  linkSubscription: (subscriptionId: number, installationId: number | null) =>
+    http.put<OsosSubscriptionDto>(`api/osos-subscriptions/${subscriptionId}/installation`, { installationId }),
+  createInstallationFromSubscription: (subscriptionId: number) =>
+    http.post<OsosSubscriptionDto>(`api/osos-subscriptions/${subscriptionId}/create-installation`),
+
+  documents: (id: number, opts: { documentTypeId?: number | null; installationId?: number | null; includeInactive?: boolean } = {}) => {
+    const q = new URLSearchParams();
+    if (opts.documentTypeId) q.set("documentTypeId", String(opts.documentTypeId));
+    if (opts.installationId) q.set("installationId", String(opts.installationId));
+    if (opts.includeInactive) q.set("includeInactive", "true");
+    return http.get<DocumentDto[]>(`api/customers/${id}/documents?${q}`);
+  },
+  uploadDocument: (id: number, d: DocumentUpload) => {
+    const f = new FormData();
+    f.set("file", d.file);
+    f.set("documentTypeId", String(d.documentTypeId));
+    const opt: Record<string, unknown> = {
+      installationId: d.installationId, title: d.title, documentDate: d.documentDate, periodYear: d.periodYear,
+      periodMonth: d.periodMonth, expiryDate: d.expiryDate, description: d.description,
+    };
+    for (const [k, v] of Object.entries(opt)) if (v !== undefined && v !== null && v !== "") f.set(k, String(v));
+    return http.upload<{ id: number }>(`api/customers/${id}/documents`, f);
+  },
+  downloadDocument: (doc: { id: number; fileName: string }) => http.download(`api/documents/${doc.id}/download`, doc.fileName),
+  deleteDocument: (documentId: number) => http.del(`api/documents/${documentId}`),
+  restoreDocument: (documentId: number) => http.post<void>(`api/documents/${documentId}/restore`),
+};
+
+export const parametersApi = {
+  list: (includeInactive = false) => http.get<ParameterGroupDto[]>(`api/parameters?includeInactive=${includeInactive}`),
+  createValue: (groupId: number, req: ParameterValueSaveRequest) =>
+    http.post<ParameterValueDto>(`api/parameters/groups/${groupId}/values`, req),
+  updateValue: (valueId: number, req: ParameterValueSaveRequest) =>
+    http.put<ParameterValueDto>(`api/parameters/values/${valueId}`, req),
+  createGroup: (req: { code: string; name: string; isActive: boolean }) =>
+    http.post<ParameterGroupDto>("api/parameters/groups", req),
+};
+
+export const mailApi = {
+  status: () => http.get<{ enabled: boolean }>("api/mail/status"),
+  test: (to: string) => http.post<LinkResponse>("api/mail/test", { to }),
 };

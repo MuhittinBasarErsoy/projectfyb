@@ -10,5 +10,6 @@
   <Folder Name="/tests/">
     <Project Path="tests/Osos.Core.Tests/Osos.Core.Tests.csproj" />
     <Project Path="tests/Epias.Core.Tests/Epias.Core.Tests.csproj" />
+    <Project Path="tests/FyBlue.Server.Tests/FyBlue.Server.Tests.csproj" />
   </Folder>
 </Solution>

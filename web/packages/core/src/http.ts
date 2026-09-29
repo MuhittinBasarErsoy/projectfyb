@@ -40,13 +40,15 @@ async function send(method: string, url: string, body?: unknown, signal?: AbortS
   const headers: Record<string, string> = {};
   const token = auth.get().token;
   if (token) headers.Authorization = `Bearer ${token}`;
-  if (body !== undefined) headers["Content-Type"] = "application/json";
+  // FormData: tarayıcı multipart sınırını kendisi yazar, Content-Type verilmez.
+  const isForm = typeof FormData !== "undefined" && body instanceof FormData;
+  if (body !== undefined && !isForm) headers["Content-Type"] = "application/json";
 
   try {
     return await fetch(BASE + url, {
       method,
       headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body: body === undefined ? undefined : isForm ? (body as FormData) : JSON.stringify(body),
       signal,
     });
   } catch (e) {
@@ -123,12 +125,25 @@ export const http = {
     return readJson<T>(res);
   },
 
+  async put<T>(url: string, body: unknown): Promise<T> {
+    const res = await send("PUT", url, body);
+    await ensureOk(res);
+    return readJson<T>(res);
+  },
+
+  /** Dosya yükleme (multipart/form-data). */
+  async upload<T>(url: string, form: FormData): Promise<T> {
+    const res = await send("POST", url, form);
+    await ensureOk(res);
+    return readJson<T>(res);
+  },
+
   async del(url: string): Promise<void> {
     const res = await send("DELETE", url);
     await ensureOk(res);
   },
 
-  /** Dosyayı indirir (CSV). Ad Content-Disposition'dan okunur. */
+  /** Dosyayı indirir (CSV, belge). Ad Content-Disposition'dan okunur. */
   async download(url: string, fallbackName: string): Promise<void> {
     const res = await send("GET", url);
     await ensureOk(res);

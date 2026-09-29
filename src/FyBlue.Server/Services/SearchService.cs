@@ -26,39 +26,44 @@ public sealed class SearchService
     /// <summary>OSOS tarih formatı: yyyyMMddHHmmss (long).</summary>
     public static long ToOsosDate(DateTime dt) => long.Parse(dt.ToString("yyyyMMddHHmmss"));
 
-    /// <summary>Ekran tipine göre OSOS parametrelerini kurar ve çalıştırıp kaydeder (controller + job ortak).</summary>
-    public Task<OsosResult> RunScreenAsync(string appUserId, string screen, long serno,
+    /// <summary>
+    /// Seçili tesisat yoksa ("tümü / Otomatik") kullanıcının tüm tesisat Serno'larını döner.
+    /// OSOS GetCustomerSelected* servisleri boş Selected ile veri döndürmüyor.
+    /// </summary>
+    public async Task<long[]> ResolveSelectedAsync(string appUserId, long[]? selected, CancellationToken ct)
+        => selected is { Length: > 0 } ? selected : await _osos.GetSubscriptionSernosAsync(appUserId, ct);
+
+    /// <summary>
+    /// Ekran tipine göre OSOS parametrelerini kurar ve çalıştırıp kaydeder (controller + job ortak).
+    /// serno: müşteri Serno'su (Dashboard'da tesisat/owner Serno'su); selected boşsa tüm tesisatlar.
+    /// </summary>
+    public async Task<OsosResult> RunScreenAsync(string appUserId, string screen, long serno,
         DateTime start, DateTime end, int type, long[]? selected, CancellationToken ct)
     {
+        var sel = screen is "Subscriptions" or "Dashboard" ? [] : await ResolveSelectedAsync(appUserId, selected, ct);
+        var (name, method, p) = BuildScreenCall(screen, serno, start, end, type, sel);
+        bool dated = name != "Subscriptions";
+        return await RunAndSaveAsync(appUserId, name, method, p, serno, dated ? start : null, dated ? end : null, ct);
+    }
+
+    /// <summary>Ekran → (normalize ekran adı, OSOS MethodName, parametreler). Bilinmeyen ekran Consumption sayılır.</summary>
+    public static (string screen, string method, object parameters) BuildScreenCall(string screen, long serno,
+        DateTime start, DateTime end, int type, long[] sel)
+    {
         long D(DateTime dt) => ToOsosDate(dt);
-        var sel = selected ?? Array.Empty<long>();
-        object p;
-        string method;
-        switch (screen)
+        return screen switch
         {
-            case "Endex":
-                method = OsosMethods.GetCustomerSelectedCurrentEndexes;
-                p = new { Serno = serno, StartDate = D(start), EndDate = D(end), Selected = sel, MarkFilterString = (string?)null, TitleFilterString = (string?)null, TotalItemCount = 0 };
-                break;
-            case "Profiles":
-                method = OsosMethods.GetCustomerSelectedProfiles;
-                p = new { Serno = serno, StartDate = D(start), EndDate = D(end), Selected = sel, MarkFilterString = (string?)null, TitleFilterString = (string?)null, TotalItemCount = 0, WithourMultiplier = true };
-                break;
-            case "Subscriptions":
-                method = OsosMethods.GetCustomerPortalSubscriptions;
-                p = new { Serno = serno, PageSize = 1000, PageNumber = 1 };
-                return RunAndSaveAsync(appUserId, screen, method, p, serno, null, null, ct);
-            case "Dashboard":
-                method = OsosMethods.GetOwnerConsumptions;
-                p = new { OwnerSerno = serno, OwnerType = 15, StartDate = D(start), EndDate = D(end), IsOnlySuccess = true, IncludeLoadProfiles = false, IncludeVersions = false, WithoutMultiplier = false, MergeResult = true };
-                break;
-            default: // Consumption
-                screen = "Consumption";
-                method = OsosMethods.GetCustomerSelectedConsumptions;
-                p = new { Serno = serno, StartDate = D(start), EndDate = D(end), Selected = sel, Type = type, Period = 0, MarkFilterString = (string?)null, TitleFilterString = (string?)null, TotalItemCount = 0 };
-                break;
-        }
-        return RunAndSaveAsync(appUserId, screen, method, p, serno, start, end, ct);
+            "Endex" => (screen, OsosMethods.GetCustomerSelectedCurrentEndexes,
+                new { Serno = serno, StartDate = D(start), EndDate = D(end), Selected = sel, MarkFilterString = (string?)null, TitleFilterString = (string?)null, TotalItemCount = 0 }),
+            "Profiles" => (screen, OsosMethods.GetCustomerSelectedProfiles,
+                new { Serno = serno, StartDate = D(start), EndDate = D(end), Selected = sel, MarkFilterString = (string?)null, TitleFilterString = (string?)null, TotalItemCount = 0, WithourMultiplier = true }),
+            "Subscriptions" => (screen, OsosMethods.GetCustomerPortalSubscriptions,
+                new { Serno = serno, PageSize = 1000, PageNumber = 1 }),
+            "Dashboard" => (screen, OsosMethods.GetOwnerConsumptions,
+                new { OwnerSerno = serno, OwnerType = 15, StartDate = D(start), EndDate = D(end), IsOnlySuccess = true, IncludeLoadProfiles = false, IncludeVersions = false, WithoutMultiplier = false, MergeResult = true }),
+            _ => ("Consumption", OsosMethods.GetCustomerSelectedConsumptions,
+                new { Serno = serno, StartDate = D(start), EndDate = D(end), Selected = sel, Type = type, Period = 0, MarkFilterString = (string?)null, TitleFilterString = (string?)null, TotalItemCount = 0 }),
+        };
     }
 
     /// <summary>Çağrıyı yapar, geçmiş + snapshot kaydeder, ham sonucu döner.</summary>
@@ -117,13 +122,34 @@ public sealed class SearchService
         return new OsosResult(rawJson, rowCount, history.Id);
     }
 
+    /// <summary>Başarısız bir iş çalışmasını geçmişe hata olarak yazar (Geçmiş'te görünsün).</summary>
+    public async Task<long> SaveFailureAsync(string appUserId, string screen, object parameters, long? serno,
+        DateTime? start, DateTime? end, string error, CancellationToken ct)
+    {
+        var history = new SearchHistory
+        {
+            AppUserId = appUserId,
+            Screen = screen,
+            MethodName = "",
+            ParametersJson = JsonSerializer.Serialize(parameters),
+            Serno = serno,
+            StartDate = start,
+            EndDate = end,
+            RowCount = 0,
+            Error = error.Length > 2000 ? error[..2000] : error
+        };
+        _db.SearchHistories.Add(history);
+        await _db.SaveChangesAsync(ct);
+        return history.Id;
+    }
+
     public async Task<PagedResult<SearchHistoryDto>> GetHistoryAsync(string appUserId, int page, int pageSize, CancellationToken ct)
     {
         var q = _db.SearchHistories.AsNoTracking().Where(h => h.AppUserId == appUserId).OrderByDescending(h => h.CreatedAt);
         int total = await q.CountAsync(ct);
         var items = await q.Skip((page - 1) * pageSize).Take(pageSize)
             .Select(h => new SearchHistoryDto(h.Id, h.Screen, h.MethodName, h.ParametersJson, h.Serno,
-                h.StartDate, h.EndDate, h.RowCount, h.CreatedAt))
+                h.StartDate, h.EndDate, h.RowCount, h.CreatedAt, h.Error))
             .ToListAsync(ct);
         return new PagedResult<SearchHistoryDto>(items, total, page, pageSize);
     }
@@ -200,7 +226,7 @@ public sealed class SearchService
         return sb.ToString();
     }
 
-    private static string CellValue(JsonElement v) => v.ValueKind switch
+    internal static string CellValue(JsonElement v) => v.ValueKind switch
     {
         JsonValueKind.String => v.GetString() ?? "",
         JsonValueKind.Number => v.GetRawText(),
@@ -236,32 +262,14 @@ public sealed class SearchService
         }
     }
 
-    /// <summary>Yanıttaki satır sayısını kabaca tahmin eder (ilk bulunan dizi).</summary>
+    /// <summary>Yanıttaki satır sayısı: ilk obje dizisinin uzunluğu (ResultMaterializer ile aynı kural).</summary>
     private static int CountRows(string json)
     {
         try
         {
             using var doc = JsonDocument.Parse(json);
-            return FindFirstArrayLength(doc.RootElement) ?? 0;
+            return OsosSubscriptions.FindFirstObjectArray(doc.RootElement)?.GetArrayLength() ?? 0;
         }
         catch { return 0; }
-    }
-
-    private static int? FindFirstArrayLength(JsonElement el)
-    {
-        switch (el.ValueKind)
-        {
-            case JsonValueKind.Array:
-                return el.GetArrayLength();
-            case JsonValueKind.Object:
-                foreach (var p in el.EnumerateObject())
-                {
-                    var r = FindFirstArrayLength(p.Value);
-                    if (r is not null) return r;
-                }
-                return null;
-            default:
-                return null;
-        }
     }
 }

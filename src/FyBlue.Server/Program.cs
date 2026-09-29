@@ -109,6 +109,18 @@ builder.Services.AddScoped<TokenService>();
 builder.Services.AddScoped<ResultMaterializer>();
 builder.Services.AddScoped<SearchService>();
 
+// İş sonuçlarını e-postayla gönderme (Smtp bölümü; Host boşsa kapalı)
+builder.Services.AddSingleton(builder.Configuration.GetSection("Smtp").Get<FyBlue.Server.Services.Mail.SmtpOptions>() ?? new());
+builder.Services.AddSingleton<FyBlue.Server.Services.Mail.IMailSender, FyBlue.Server.Services.Mail.SmtpMailSender>();
+builder.Services.AddScoped<FyBlue.Server.Services.Mail.JobResultMailer>();
+
+// Müşteri modülü
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<FyBlue.Server.Services.Customers.CurrentUser>();
+builder.Services.AddScoped<FyBlue.Server.Services.Customers.OsosSyncService>();
+builder.Services.AddScoped<FyBlue.Server.Services.Customers.CustomerOsosQueryService>();
+builder.Services.AddSingleton<FyBlue.Server.Services.Customers.IFileStorage, FyBlue.Server.Services.Customers.LocalFileStorage>();
+
 builder.Services.AddHangfire(cfg => cfg
     .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
     .UseSimpleAssemblyNameTypeSerializer()
@@ -184,6 +196,7 @@ await using (var scope = app.Services.CreateAsyncScope())
     {
         await sp.GetRequiredService<AppDbContext>().Database.MigrateAsync();
         await sp.GetRequiredService<EpiasDbContext>().Database.MigrateAsync();
+        await FyBlue.Server.Services.Customers.CustomerModuleSeeder.SeedAsync(sp.GetRequiredService<AppDbContext>());
     }
     catch (Microsoft.Data.SqlClient.SqlException ex)
     {
@@ -264,6 +277,12 @@ app.UseHangfireDashboard("/hangfire", new DashboardOptions
 {
     Authorization = new[] { new BasicAuthDashboardFilter(hfUser, hfPass) }
 });
+
+// Müşteri OSOS bağlantılarının günlük senkronizasyonu (abonelikler + tesisat kaynak değerleri).
+app.Services.GetRequiredService<IRecurringJobManager>().AddOrUpdate<FyBlue.Server.Services.Customers.OsosSyncService>(
+    "system:osos-connections-sync", s => s.SyncAllAsync(),
+    builder.Configuration["Customers:SyncCron"] ?? "0 6 * * *",
+    new RecurringJobOptions { TimeZone = TimeZoneInfo.Local });
 
 app.MapControllers();
 app.MapHealthChecks("/health");

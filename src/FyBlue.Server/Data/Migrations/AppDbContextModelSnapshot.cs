@@ -37,6 +37,9 @@ namespace FyBlue.Server.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<int?>("CustomerId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Email")
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
@@ -67,6 +70,13 @@ namespace FyBlue.Server.Data.Migrations
                     b.Property<bool>("PhoneNumberConfirmed")
                         .HasColumnType("bit");
 
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("Consultant");
+
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("nvarchar(max)");
 
@@ -79,6 +89,8 @@ namespace FyBlue.Server.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CustomerId");
+
                     b.HasIndex("NormalizedEmail")
                         .HasDatabaseName("EmailIndex");
 
@@ -88,6 +100,194 @@ namespace FyBlue.Server.Data.Migrations
                         .HasFilter("[NormalizedUserName] IS NOT NULL");
 
                     b.ToTable("AspNetUsers", (string)null);
+                });
+
+            modelBuilder.Entity("FyBlue.Server.Data.Customer", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Address")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("address");
+
+                    b.Property<string>("AuthorizedPerson")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasColumnName("authorized_person");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CustomerCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("customer_code");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasColumnName("email");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("notes");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("phone");
+
+                    b.Property<string>("ShortName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("short_name");
+
+                    b.Property<string>("TaxNumber")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasColumnName("tax_number");
+
+                    b.Property<string>("TaxOffice")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("tax_office");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)")
+                        .HasColumnName("title");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerCode")
+                        .IsUnique();
+
+                    b.ToTable("customers", (string)null);
+                });
+
+            modelBuilder.Entity("FyBlue.Server.Data.Document", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at");
+
+                    b.Property<int>("CustomerId")
+                        .HasColumnType("int")
+                        .HasColumnName("customer_id");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<string>("DeletedByUserId")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("deleted_by_user_id");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("description");
+
+                    b.Property<DateOnly?>("DocumentDate")
+                        .HasColumnType("date")
+                        .HasColumnName("document_date");
+
+                    b.Property<int>("DocumentTypeId")
+                        .HasColumnType("int")
+                        .HasColumnName("document_type_id");
+
+                    b.Property<DateOnly?>("ExpiryDate")
+                        .HasColumnType("date")
+                        .HasColumnName("expiry_date");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)")
+                        .HasColumnName("file_name");
+
+                    b.Property<long>("FileSize")
+                        .HasColumnType("bigint")
+                        .HasColumnName("file_size");
+
+                    b.Property<int?>("InstallationId")
+                        .HasColumnType("int")
+                        .HasColumnName("installation_id");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("MimeType")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)")
+                        .HasColumnName("mime_type");
+
+                    b.Property<int?>("PeriodMonth")
+                        .HasColumnType("int")
+                        .HasColumnName("period_month");
+
+                    b.Property<int?>("PeriodYear")
+                        .HasColumnType("int")
+                        .HasColumnName("period_year");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)")
+                        .HasColumnName("storage_key");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)")
+                        .HasColumnName("title");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("UploadedByType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasColumnName("uploaded_by_type");
+
+                    b.Property<string>("UploadedByUserId")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("uploaded_by_user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentTypeId");
+
+                    b.HasIndex("InstallationId");
+
+                    b.HasIndex("CustomerId", "IsActive");
+
+                    b.ToTable("documents", (string)null);
                 });
 
             modelBuilder.Entity("FyBlue.Server.Data.EpiasCredential", b =>
@@ -120,6 +320,176 @@ namespace FyBlue.Server.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("EpiasCredentials");
+                });
+
+            modelBuilder.Entity("FyBlue.Server.Data.Installation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at");
+
+                    b.Property<int>("CustomerId")
+                        .HasColumnType("int")
+                        .HasColumnName("customer_id");
+
+                    b.Property<int?>("DistributionCompanyId")
+                        .HasColumnType("int")
+                        .HasColumnName("distribution_company_id");
+
+                    b.Property<string>("GenerationType")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasColumnName("generation_type");
+
+                    b.Property<string>("InstallationType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasColumnName("installation_type");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<decimal?>("Latitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)")
+                        .HasColumnName("latitude");
+
+                    b.Property<decimal?>("Longitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)")
+                        .HasColumnName("longitude");
+
+                    b.Property<string>("ManualAddress")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("manual_address");
+
+                    b.Property<decimal?>("ManualContractPowerKw")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("manual_contract_power_kw");
+
+                    b.Property<decimal?>("ManualInstalledPowerKw")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("manual_installed_power_kw");
+
+                    b.Property<string>("MeterType")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("meter_type");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("SourceAddress")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("source_address");
+
+                    b.Property<decimal?>("SourceContractPowerKw")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("source_contract_power_kw");
+
+                    b.Property<decimal?>("SourceInstalledPowerKw")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("source_installed_power_kw");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("VoltageLevel")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("voltage_level");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("DistributionCompanyId");
+
+                    b.ToTable("installations", (string)null);
+                });
+
+            modelBuilder.Entity("FyBlue.Server.Data.OsosConnection", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ConnectionName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasColumnName("connection_name");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at");
+
+                    b.Property<int>("CustomerId")
+                        .HasColumnType("int")
+                        .HasColumnName("customer_id");
+
+                    b.Property<int?>("DistributionCompanyId")
+                        .HasColumnType("int")
+                        .HasColumnName("distribution_company_id");
+
+                    b.Property<string>("EncryptedPassword")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("encrypted_password");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("LastConnectionStatus")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)")
+                        .HasColumnName("last_connection_status");
+
+                    b.Property<DateTime?>("LastConnectionTestAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("last_connection_test_at");
+
+                    b.Property<DateTime?>("LastSyncAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("last_sync_at");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("Username")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("username");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("DistributionCompanyId");
+
+                    b.ToTable("osos_connections", (string)null);
                 });
 
             modelBuilder.Entity("FyBlue.Server.Data.OsosCredential", b =>
@@ -159,6 +529,351 @@ namespace FyBlue.Server.Data.Migrations
                     b.ToTable("OsosCredentials");
                 });
 
+            modelBuilder.Entity("FyBlue.Server.Data.OsosSubscription", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal?>("ContractPowerKw")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("contract_power_kw");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CustomerFieldsJson")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("customer_fields_json");
+
+                    b.Property<string>("DefinitionType")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("definition_type");
+
+                    b.Property<string>("EtsoCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("etso_code");
+
+                    b.Property<string>("GroupInfo")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("group_info");
+
+                    b.Property<string>("IdentifierValue")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("identifier_value");
+
+                    b.Property<string>("IdentifierValueSec")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("identifier_value_sec");
+
+                    b.Property<int?>("InstallationId")
+                        .HasColumnType("int")
+                        .HasColumnName("installation_id");
+
+                    b.Property<decimal?>("InstalledPowerKw")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("installed_power_kw");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<DateTime?>("LastIndexAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("last_index_at");
+
+                    b.Property<DateTime?>("LastProfileAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("last_profile_at");
+
+                    b.Property<string>("MeterBrand")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("meter_brand");
+
+                    b.Property<string>("MeterModel")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("meter_model");
+
+                    b.Property<DateTime?>("MeterPointAssignedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("meter_point_assigned_at");
+
+                    b.Property<string>("MeterSerial")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("meter_serial");
+
+                    b.Property<decimal?>("MinCapacitiveRate")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("min_capacitive_rate");
+
+                    b.Property<decimal?>("MinInductiveRate")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("min_inductive_rate");
+
+                    b.Property<decimal?>("Multiplier")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("multiplier");
+
+                    b.Property<DateTime?>("MultiplierChangedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("multiplier_changed_at");
+
+                    b.Property<int>("OsosConnectionId")
+                        .HasColumnType("int")
+                        .HasColumnName("osos_connection_id");
+
+                    b.Property<string>("ScheduleCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("schedule_code");
+
+                    b.Property<string>("SourceAddress")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("source_address");
+
+                    b.Property<string>("SourceTitle")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)")
+                        .HasColumnName("source_title");
+
+                    b.Property<long>("SubscriptionSerno")
+                        .HasColumnType("bigint")
+                        .HasColumnName("subscription_serno");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InstallationId");
+
+                    b.HasIndex("OsosConnectionId", "SubscriptionSerno")
+                        .IsUnique();
+
+                    b.ToTable("osos_subscriptions", (string)null);
+                });
+
+            modelBuilder.Entity("FyBlue.Server.Data.ParameterGroup", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("code");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<bool>("IsSystem")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_system");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasColumnName("name");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.ToTable("parameter_groups", (string)null);
+                });
+
+            modelBuilder.Entity("FyBlue.Server.Data.ParameterValue", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("code");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<bool>("IsSystem")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_system");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasColumnName("name");
+
+                    b.Property<int>("ParameterGroupId")
+                        .HasColumnType("int")
+                        .HasColumnName("parameter_group_id");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int")
+                        .HasColumnName("sort_order");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParameterGroupId", "Code")
+                        .IsUnique();
+
+                    b.ToTable("parameter_values", (string)null);
+                });
+
+            modelBuilder.Entity("FyBlue.Server.Data.ProductionSiteInfo", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal?>("AcPowerKw")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("ac_power_kw");
+
+                    b.Property<decimal?>("AzimuthDeg")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)")
+                        .HasColumnName("azimuth_deg");
+
+                    b.Property<DateOnly?>("CommissioningDate")
+                        .HasColumnType("date")
+                        .HasColumnName("commissioning_date");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at");
+
+                    b.Property<decimal?>("DcPowerKwp")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("dc_power_kwp");
+
+                    b.Property<int>("InstallationId")
+                        .HasColumnType("int")
+                        .HasColumnName("installation_id");
+
+                    b.Property<string>("InverterBrand")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("inverter_brand");
+
+                    b.Property<string>("InverterModel")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("inverter_model");
+
+                    b.Property<int?>("InverterQuantity")
+                        .HasColumnType("int")
+                        .HasColumnName("inverter_quantity");
+
+                    b.Property<decimal?>("InverterUnitPowerKw")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("inverter_unit_power_kw");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("notes");
+
+                    b.Property<string>("PanelBrand")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("panel_brand");
+
+                    b.Property<string>("PanelModel")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("panel_model");
+
+                    b.Property<int?>("PanelQuantity")
+                        .HasColumnType("int")
+                        .HasColumnName("panel_quantity");
+
+                    b.Property<decimal?>("PanelUnitPowerWp")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("panel_unit_power_wp");
+
+                    b.Property<string>("PlantName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasColumnName("plant_name");
+
+                    b.Property<string>("PlantSubtype")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasColumnName("plant_subtype");
+
+                    b.Property<decimal?>("TiltDeg")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)")
+                        .HasColumnName("tilt_deg");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InstallationId")
+                        .IsUnique();
+
+                    b.ToTable("production_site_info", (string)null);
+                });
+
             modelBuilder.Entity("FyBlue.Server.Data.SearchHistory", b =>
                 {
                     b.Property<long>("Id")
@@ -176,6 +891,9 @@ namespace FyBlue.Server.Data.Migrations
 
                     b.Property<DateTime?>("EndDate")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("Error")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("MethodName")
                         .IsRequired()
@@ -367,6 +1085,42 @@ namespace FyBlue.Server.Data.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("FyBlue.Server.Data.AppUser", b =>
+                {
+                    b.HasOne("FyBlue.Server.Data.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Customer");
+                });
+
+            modelBuilder.Entity("FyBlue.Server.Data.Document", b =>
+                {
+                    b.HasOne("FyBlue.Server.Data.Customer", "Customer")
+                        .WithMany("Documents")
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("FyBlue.Server.Data.ParameterValue", "DocumentType")
+                        .WithMany()
+                        .HasForeignKey("DocumentTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("FyBlue.Server.Data.Installation", "Installation")
+                        .WithMany()
+                        .HasForeignKey("InstallationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("DocumentType");
+
+                    b.Navigation("Installation");
+                });
+
             modelBuilder.Entity("FyBlue.Server.Data.EpiasCredential", b =>
                 {
                     b.HasOne("FyBlue.Server.Data.AppUser", "AppUser")
@@ -378,6 +1132,42 @@ namespace FyBlue.Server.Data.Migrations
                     b.Navigation("AppUser");
                 });
 
+            modelBuilder.Entity("FyBlue.Server.Data.Installation", b =>
+                {
+                    b.HasOne("FyBlue.Server.Data.Customer", "Customer")
+                        .WithMany("Installations")
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("FyBlue.Server.Data.ParameterValue", "DistributionCompany")
+                        .WithMany()
+                        .HasForeignKey("DistributionCompanyId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("DistributionCompany");
+                });
+
+            modelBuilder.Entity("FyBlue.Server.Data.OsosConnection", b =>
+                {
+                    b.HasOne("FyBlue.Server.Data.Customer", "Customer")
+                        .WithMany("OsosConnections")
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("FyBlue.Server.Data.ParameterValue", "DistributionCompany")
+                        .WithMany()
+                        .HasForeignKey("DistributionCompanyId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("DistributionCompany");
+                });
+
             modelBuilder.Entity("FyBlue.Server.Data.OsosCredential", b =>
                 {
                     b.HasOne("FyBlue.Server.Data.AppUser", "AppUser")
@@ -387,6 +1177,46 @@ namespace FyBlue.Server.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("AppUser");
+                });
+
+            modelBuilder.Entity("FyBlue.Server.Data.OsosSubscription", b =>
+                {
+                    b.HasOne("FyBlue.Server.Data.Installation", "Installation")
+                        .WithMany("OsosSubscriptions")
+                        .HasForeignKey("InstallationId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("FyBlue.Server.Data.OsosConnection", "OsosConnection")
+                        .WithMany("Subscriptions")
+                        .HasForeignKey("OsosConnectionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Installation");
+
+                    b.Navigation("OsosConnection");
+                });
+
+            modelBuilder.Entity("FyBlue.Server.Data.ParameterValue", b =>
+                {
+                    b.HasOne("FyBlue.Server.Data.ParameterGroup", "ParameterGroup")
+                        .WithMany("Values")
+                        .HasForeignKey("ParameterGroupId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ParameterGroup");
+                });
+
+            modelBuilder.Entity("FyBlue.Server.Data.ProductionSiteInfo", b =>
+                {
+                    b.HasOne("FyBlue.Server.Data.Installation", "Installation")
+                        .WithOne("ProductionSiteInfo")
+                        .HasForeignKey("FyBlue.Server.Data.ProductionSiteInfo", "InstallationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Installation");
                 });
 
             modelBuilder.Entity("FyBlue.Server.Data.SearchHistory", b =>
@@ -469,6 +1299,32 @@ namespace FyBlue.Server.Data.Migrations
                     b.Navigation("OsosCredential");
 
                     b.Navigation("Searches");
+                });
+
+            modelBuilder.Entity("FyBlue.Server.Data.Customer", b =>
+                {
+                    b.Navigation("Documents");
+
+                    b.Navigation("Installations");
+
+                    b.Navigation("OsosConnections");
+                });
+
+            modelBuilder.Entity("FyBlue.Server.Data.Installation", b =>
+                {
+                    b.Navigation("OsosSubscriptions");
+
+                    b.Navigation("ProductionSiteInfo");
+                });
+
+            modelBuilder.Entity("FyBlue.Server.Data.OsosConnection", b =>
+                {
+                    b.Navigation("Subscriptions");
+                });
+
+            modelBuilder.Entity("FyBlue.Server.Data.ParameterGroup", b =>
+                {
+                    b.Navigation("Values");
                 });
 
             modelBuilder.Entity("FyBlue.Server.Data.SearchHistory", b =>

@@ -4,7 +4,7 @@ import { connections } from "../connections";
 import { daysAgo, today } from "../format";
 import { errorMessage } from "../http";
 import { buildSeries, chartColumns, parseResult } from "../results";
-import { parseSubscriptions, type SubscriptionItem } from "../subscriptions";
+import { filterSubscriptions, parseSubscriptions, subscriptionText, type SubscriptionItem } from "../subscriptions";
 import type {
   JobDto,
   OsosResult,
@@ -30,6 +30,43 @@ function useSubscriptions(enabled = true) {
   }, [enabled]);
   return subs;
 }
+
+/**
+ * Aranabilir tesisat seçici (combobox) durumu. value=0 → "Otomatik (tüm tesisatlar)".
+ * Liste tamamı gösterilmez; yazdıkça ünvan/abone no/Serno ile filtrelenir (en çok 50).
+ */
+export function useSubscriptionPicker(subs: SubscriptionItem[], value: number, onChange: (serno: number) => void) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const selected = subs.find((s) => s.serno === value) ?? null;
+  const results = useMemo(() => filterSubscriptions(subs, query), [subs, query]);
+  const matchCount = useMemo(() => (query.trim() ? filterSubscriptions(subs, query, Infinity).length : subs.length), [subs, query]);
+
+  function pick(serno: number) {
+    onChange(serno);
+    setQuery("");
+    setOpen(false);
+  }
+
+  return {
+    query,
+    setQuery: (q: string) => {
+      setQuery(q);
+      setOpen(true);
+    },
+    open,
+    setOpen,
+    results,
+    /** Filtreye uyan toplam kayıt (listede en çok 50 gösterilir). */
+    matchCount,
+    total: subs.length,
+    selectedText: value === 0 ? AUTO_SUBSCRIPTION_TEXT : selected ? subscriptionText(selected) : `#${value}`,
+    pick,
+    text: subscriptionText,
+  };
+}
+
+export const AUTO_SUBSCRIPTION_TEXT = "Otomatik (tüm tesisatlar)";
 
 /** Tablo/grafik görünümü için ham JSON'u çözer ve grafik sütun seçimini tutar. */
 export function useResultView(json: string | null | undefined) {
@@ -97,7 +134,9 @@ export function useOsosQuery() {
   const [result, setResult] = useState<OsosResult | null>(null);
   const [view, setView] = useState<ResultViewMode>("table");
   const [selected, setSelected] = useState<number[]>([]);
+  const [subsQuery, setSubsQuery] = useState("");
   const subs = useSubscriptions();
+  const visibleSubs = useMemo(() => filterSubscriptions(subs, subsQuery, Infinity), [subs, subsQuery]);
 
   const toggle = (serno: number, on: boolean) =>
     setSelected((prev) => (on ? [...new Set([...prev, serno])] : prev.filter((s) => s !== serno)));
@@ -150,6 +189,10 @@ export function useOsosQuery() {
     type,
     setType,
     subs,
+    /** Tesisat filtresindeki arama metni ve ona uyan tesisatlar. */
+    subsQuery,
+    setSubsQuery,
+    visibleSubs,
     selected,
     toggle,
     usesDates,
@@ -264,11 +307,12 @@ export function useHistory(pageSize = 25) {
 export function useJobs() {
   const [screen, setScreen] = useState("Consumption");
   const [serno, setSerno] = useState(0);
-  const [daysBack, setDaysBack] = useState(1);
+  const [daysBack, setDaysBack] = useState(2);
   const [type, setType] = useState(2);
   const [cronPreset, setCronPreset] = useState("");
   const [customCron, setCustomCron] = useState("");
   const [name, setName] = useState("");
+  const [notifyEmails, setNotifyEmails] = useState("");
   const [lat, setLat] = useState(40.195);
   const [lon, setLon] = useState(29.06);
   const [tz, setTz] = useState("Europe/Istanbul");
@@ -313,7 +357,7 @@ export function useJobs() {
     setNotice(null);
     try {
       if (isWeather) await ososApi.weatherRunNow(weatherReq(null));
-      else await ososApi.runNow({ screen, serno, daysBack, type });
+      else await ososApi.runNow({ screen, serno, daysBack, type, notifyEmails: notifyEmails.trim() || null });
       setNotice({ ok: true, text: "İş kuyruğa alındı — birkaç saniye içinde çalışır ve Geçmiş'te görünür." });
     } catch (e) {
       setNotice({ ok: false, text: errorMessage(e) });
@@ -327,7 +371,16 @@ export function useJobs() {
     setNotice(null);
     try {
       if (isWeather) await ososApi.weatherSchedule(weatherReq(effectiveCron));
-      else await ososApi.schedule({ screen, serno, daysBack, type, cron: effectiveCron, name: name || null });
+      else
+        await ososApi.schedule({
+          screen,
+          serno,
+          daysBack,
+          type,
+          cron: effectiveCron,
+          name: name || null,
+          notifyEmails: notifyEmails.trim() || null,
+        });
       setNotice({ ok: true, text: "Zamanlanmış iş oluşturuldu." });
       await load();
     } catch (e) {
@@ -373,6 +426,9 @@ export function useJobs() {
     effectiveCron,
     name,
     setName,
+    /** Sonuç maili alıcıları (virgülle ayrılmış; hava durumu işlerinde yok). */
+    notifyEmails,
+    setNotifyEmails,
     lat,
     setLat,
     lon,

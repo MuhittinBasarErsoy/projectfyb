@@ -32,11 +32,23 @@ services:
       Hangfire__User: "${HANGFIRE_USER:-admin}"
       Hangfire__Password: "${HANGFIRE_PASSWORD:-}"
       ExposeApiDocs: "${EXPOSE_API_DOCS:-false}"
+      Auth__AllowRegistration: "${ALLOW_REGISTRATION:-true}"
+      Storage__FilesPath: /var/lib/fyblue/files
+      Smtp__Host: "${SMTP_HOST:-}"
+      Smtp__Port: "${SMTP_PORT:-587}"
+      Smtp__User: "${SMTP_USER:-}"
+      Smtp__Password: "${SMTP_PASSWORD:-}"
+      Smtp__From: "${SMTP_FROM:-}"
+      Smtp__Security: "${SMTP_SECURITY:-Auto}"
+      # Sorgu tarih aralığı (DateTime.Now) ve cron zamanlaması yerel saate göre çalışır.
+      TZ: Europe/Istanbul
     ports:
       - "8080:8080"
     volumes:
       # Data Protection anahtarları: silinirse saklanan OSOS/EPİAŞ şifreleri çözülemez.
       - fyblue-keys:/var/lib/fyblue/keys
+      # Müşteri belgeleri/faturalar (documents.storage_key).
+      - fyblue-files:/var/lib/fyblue/files
     depends_on:
       mssql:
         condition: service_healthy
@@ -45,3 +57,4 @@ services:
 volumes:
   mssql-data:
   fyblue-keys:
+  fyblue-files:

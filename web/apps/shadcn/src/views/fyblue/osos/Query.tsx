@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { ResultPanel } from "@/components/fyblue/data";
 import { LinkGate } from "@/components/fyblue/shell";
-import { FormField, Notice, PageHeader, Section, Segmented, Select } from "@/components/fyblue/ui";
+import SubscriptionPicker from "@/components/fyblue/SubscriptionPicker";
+import { FormField, Notice, PageHeader, Section, Segmented } from "@/components/fyblue/ui";
 import { OSOS_SCREENS, PAGE_TEXT, useOsosQuery } from "@fyblue/core";
 import { ChevronDown, Filter, Search } from "lucide-react";
 
@@ -29,14 +30,7 @@ export default function Query() {
                 {q.screen === "Dashboard" &&
                   (q.subs.length > 0 ? (
                     <FormField label="Tesisat">
-                      <Select value={String(q.ownerSerno)} onChange={(v) => q.setOwnerSerno(Number(v))}>
-                        <option value="0">— seçin —</option>
-                        {q.subs.map((s) => (
-                          <option key={s.serno} value={s.serno}>
-                            {s.label} (#{s.serno})
-                          </option>
-                        ))}
-                      </Select>
+                      <SubscriptionPicker subs={q.subs} value={q.ownerSerno} onChange={q.setOwnerSerno} allowAuto={false} />
                     </FormField>
                   ) : (
                     <FormField label="Owner Serno (tesisat)">
@@ -72,11 +66,14 @@ export default function Query() {
                 <ChevronDown className="ml-auto size-4 transition-transform group-data-[panel-open]/c:rotate-180" />
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <div className="grid max-h-64 grid-cols-1 gap-3 overflow-y-auto border-t p-3 sm:grid-cols-2">
-                  {q.subs.map((s) => (
+                <div className="border-t p-3 pb-0">
+                  <Input value={q.subsQuery} onChange={(e) => q.setSubsQuery(e.target.value)} placeholder="Ünvan, abone no veya serno ile ara…" />
+                </div>
+                <div className="grid max-h-64 grid-cols-1 gap-3 overflow-y-auto p-3 sm:grid-cols-2">
+                  {q.visibleSubs.map((s) => (
                     <label key={s.serno} className="flex items-center gap-2 text-sm">
                       <Checkbox checked={q.selected.includes(s.serno)} onCheckedChange={(on) => q.toggle(s.serno, on)} />
-                      {s.label} {s.serno > 0 && <span className="text-muted-foreground">#{s.serno}</span>}
+                      {s.label} <span className="text-muted-foreground">{s.aboneNo ? `Abone: ${s.aboneNo}` : s.serno > 0 ? `#${s.serno}` : ""}</span>
                     </label>
                   ))}
                 </div>
