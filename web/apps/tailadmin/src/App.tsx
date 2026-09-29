@@ -15,7 +15,10 @@ import Jobs from "./pages/Osos/Jobs";
 import Query from "./pages/Osos/Query";
 import Weather from "./pages/Osos/Weather";
 import Overview from "./pages/Overview";
+import CustomerDetail from "./pages/Customers/CustomerDetail";
+import CustomerList from "./pages/Customers/CustomerList";
 import Connections from "./pages/Settings/Connections";
+import Parameters from "./pages/Settings/Parameters";
 import Profile from "./pages/Settings/Profile";
 
 function ScrollToTop() {
@@ -44,6 +47,9 @@ export default function App() {
         >
           <Route index path="/" element={<Overview />} />
 
+          <Route path="/customers" element={<CustomerList />} />
+          <Route path="/customers/:id" element={<CustomerDetail />} />
+
           <Route path="/osos/query" element={<Query />} />
           <Route path="/osos/history" element={<History />} />
           <Route path="/osos/jobs" element={<Jobs />} />
@@ -55,6 +61,7 @@ export default function App() {
           <Route path="/epias/formulas" element={<Formulas />} />
 
           <Route path="/settings/connections" element={<Connections />} />
+          <Route path="/settings/parameters" element={<Parameters />} />
           <Route path="/settings/profile" element={<Profile />} />
         </Route>
 

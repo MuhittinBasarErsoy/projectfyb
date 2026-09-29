@@ -4,13 +4,14 @@ import Input from "@/components/form/input/InputField";
 import { Notice, PageHeader, Spinner } from "@/components/fyblue/ui";
 import Badge from "@/components/ui/badge/Badge";
 import Button from "@/components/ui/button/Button";
-import { BoltIcon, CheckLineIcon, LockIcon, PencilIcon, PieChartIcon, PlugInIcon } from "@/icons";
+import { BoltIcon, CheckLineIcon, LockIcon, MailIcon, PencilIcon, PieChartIcon, PlugInIcon } from "@/icons";
 import {
   CONNECTION_INFO,
   fmtDateTime,
   PAGE_TEXT,
   useConnectionCard,
   useConnections,
+  useMailSettings,
   type ExternalAccountStatus,
   type ExternalSystem,
 } from "@fyblue/core";
@@ -116,6 +117,62 @@ function ConnectionCard({
   );
 }
 
+function MailCard() {
+  const m = useMailSettings();
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-5 lg:p-6 dark:border-gray-800 dark:bg-white/[0.03]">
+      <div className="flex items-center gap-4">
+        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-white/90">
+          <MailIcon className="size-6" />
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">E-posta (SMTP)</h3>
+          <div className="mt-1">
+            {m.enabled === null ? (
+              <Badge size="sm" color="light">
+                Kontrol ediliyor…
+              </Badge>
+            ) : m.enabled ? (
+              <Badge size="sm" color="success" startIcon={<CheckLineIcon className="size-3" />}>
+                Ayarlı
+              </Badge>
+            ) : (
+              <Badge size="sm" color="light">
+                Ayarlı değil
+              </Badge>
+            )}
+          </div>
+        </div>
+      </div>
+      <p className="mt-5 text-sm text-gray-500 dark:text-gray-400">
+        Zamanlanmış iş sonuçları bu ayarla gönderilir. SMTP bilgileri sunucudaki <code>.env</code> dosyasında (SMTP_HOST, SMTP_USER…) tanımlanır.
+      </p>
+      {m.enabled && m.canTest && (
+        <form
+          className="mt-6 flex flex-wrap items-end gap-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void m.test();
+          }}
+        >
+          <div className="min-w-64 flex-1">
+            <Label>Test maili gönderilecek adres</Label>
+            <Input type="email" value={m.to} onChange={(e) => m.setTo(e.target.value)} />
+          </div>
+          <Button size="sm" type="submit" disabled={m.busy}>
+            {m.busy ? <Spinner /> : <MailIcon className="size-5" />} Test maili gönder
+          </Button>
+        </form>
+      )}
+      {m.notice && (
+        <Notice kind={m.notice.ok ? "success" : "error"} className="mt-5">
+          {m.notice.text}
+        </Notice>
+      )}
+    </div>
+  );
+}
+
 export default function Connections() {
   const [params] = useSearchParams();
   const conn = useConnections();
@@ -136,6 +193,7 @@ export default function Connections() {
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
           <ConnectionCard system="osos" status={conn.osos} loaded={conn.loaded} />
           <ConnectionCard system="epias" status={conn.epias} loaded={conn.loaded} />
+          <MailCard />
         </div>
       </div>
     </>

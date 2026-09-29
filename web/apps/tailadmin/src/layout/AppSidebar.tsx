@@ -1,6 +1,6 @@
 import { useSidebar } from "@/context/SidebarContext";
 import { NavGlyph, Logo } from "@/components/fyblue/shell";
-import { isNavActive, NAV, useConnections, type NavGroup } from "@fyblue/core";
+import { isNavActive, navFor, useConnections, useCurrentUser, type NavGroup } from "@fyblue/core";
 import { useEffect } from "react";
 import { Link, useLocation } from "react-router";
 import { HorizontaLDots } from "../icons";
@@ -21,6 +21,8 @@ const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered, setIsMobileOpen } = useSidebar();
   const location = useLocation();
   const connections = useConnections();
+  const user = useCurrentUser();
+  const nav = navFor(user.role, user.customerId);
   const open = isExpanded || isHovered || isMobileOpen;
 
   // Auto-close sidebar on mobile after route change
@@ -53,7 +55,7 @@ const AppSidebar: React.FC = () => {
       <div className="no-scrollbar flex flex-col overflow-y-auto duration-300 ease-linear">
         <nav className="mb-6">
           <div className="flex flex-col gap-4">
-            {NAV.map((group) => (
+            {nav.map((group) => (
               <div key={group.id}>
                 <h2
                   className={cn(

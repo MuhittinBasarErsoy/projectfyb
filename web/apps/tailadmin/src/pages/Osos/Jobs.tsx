@@ -136,6 +136,16 @@ export default function Jobs() {
             <Field label="İsim (opsiyonel)">
               <TextInput value={j.name} onChange={(e) => j.setName(e.target.value)} placeholder="ör. gunluk-tuketim" />
             </Field>
+            {!j.isWeather && (
+              <Field label="Sonucu mail at (opsiyonel)" className="sm:col-span-2" hint="Virgülle ayırın. Özet tablo + CSV eki gönderilir.">
+                <TextInput
+                  type="text"
+                  value={j.notifyEmails}
+                  onChange={(e) => j.setNotifyEmails(e.target.value)}
+                  placeholder="ornek@firma.com, ikinci@firma.com"
+                />
+              </Field>
+            )}
           </div>
 
           <div className="flex flex-wrap gap-3">
@@ -179,6 +189,7 @@ export default function Jobs() {
                   <Th>Serno</Th>
                   <Th num>Gün</Th>
                   <Th>Cron</Th>
+                  <Th>Mail</Th>
                   <Th>Sonraki</Th>
                   <Th>Son</Th>
                   <Th>Durum</Th>
@@ -198,6 +209,11 @@ export default function Jobs() {
                   <Td num>{job.daysBack}</Td>
                   <Td>
                     <code className="rounded bg-gray-100 px-1.5 py-0.5 text-theme-xs dark:bg-white/5">{job.cron}</code>
+                  </Td>
+                  <Td>
+                    <span className="block max-w-48 truncate" title={job.notifyEmails ?? ""}>
+                      {job.notifyEmails ?? "—"}
+                    </span>
                   </Td>
                   <Td>{job.nextRun}</Td>
                   <Td>{job.lastRun}</Td>
